@@ -296,7 +296,7 @@ input, textarea, select { font-family: inherit; }
   border: 1px solid var(--border-soft);
   background: var(--bg-deep);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 16px;
   outline: none;
   transition: border-color .15s ease;
 }
@@ -426,7 +426,7 @@ input, textarea, select { font-family: inherit; }
 .composer input {
   flex: 1; padding: 12px 16px; border-radius: 999px;
   border: 1px solid var(--border-soft); background: var(--bg-deep);
-  color: var(--text-primary); font-size: 14px; outline: none;
+  color: var(--text-primary); font-size: 16px; outline: none;
 }
 .composer input:focus { border-color: var(--cyan); }
 .send-btn {
@@ -744,8 +744,12 @@ async function openNewChatPrompt() {
 }
 
 // ---------- opening a chat + realtime ----------
+let messageCache = {}; // id -> message, for showing reply previews
+let replyingTo = null;
+
 async function openChat(chatId) {
   activeChatId = chatId;
+  replyingTo = null;
   toggleSidebar(false);
 
   const chatInfo = chatCache.find(c => c.chatId === chatId);
@@ -763,7 +767,13 @@ async function openChat(chatId) {
       </div>
     </div>
     <div class="messages-area" id="messagesArea"></div>
+    <div id="replyPreview" style="display:none; padding:8px 16px; background:var(--bg-elevated); border-top:1px solid var(--border-soft); font-size:12.5px; color:var(--text-dim); display:flex; justify-content:space-between; align-items:center;">
+      <span id="replyPreviewText"></span>
+      <button class="icon-btn" style="width:26px;height:26px;" onclick="cancelReply()">✕</button>
+    </div>
     <div class="composer">
+      <button class="icon-btn" onclick="document.getElementById('mediaInput').click()" title="پیوست">📎</button>
+      <input type="file" id="mediaInput" style="display:none" onchange="handleMediaUpload(event)">
       <input type="text" id="msgInput" placeholder="پیام خود را بنویس..." onkeydown="if(event.key==='Enter') sendMessage()">
       <button class="send-btn" onclick="sendMessage()">➤</button>
     </div>
@@ -776,13 +786,14 @@ async function openChat(chatId) {
 async function loadMessages(chatId) {
   const { data, error } = await window.supabaseClient
     .from("messages")
-    .select("*")
+    .select("*, message_attachments(*)")
     .eq("chat_id", chatId)
     .eq("is_deleted", false)
     .order("created_at", { ascending: true })
     .limit(200); // pagination for older history: future phase
 
   if (error) { console.error(error); return; }
+  data.forEach(m => messageCache[m.id] = m);
   const area = document.getElementById("messagesArea");
   area.innerHTML = data.map(renderMessageBubble).join("");
   area.scrollTop = area.scrollHeight;
@@ -790,17 +801,76 @@ async function loadMessages(chatId) {
 
 function renderMessageBubble(msg) {
   const own = msg.sender_id === me.id;
+  const replySnippet = msg.reply_to && messageCache[msg.reply_to]
+    ? `<div style="border-right:2px solid var(--cyan); padding-right:8px; margin-bottom:6px; font-size:12px; color:var(--text-dim); opacity:.85;">${escapeHtml((messageCache[msg.reply_to].content || "").slice(0, 80))}</div>`
+    : "";
+
+  let mediaHtml = "";
+  const att = msg.message_attachments?.[0];
+  if (att) {
+    const url = window.supabaseClient.storage.from(bucketForType(msg.message_type)).getPublicUrl(att.storage_path).data.publicUrl;
+    if (msg.message_type === "image") mediaHtml = `<img src="${url}" style="max-width:100%; border-radius:10px; margin-bottom:6px; display:block;">`;
+    else if (msg.message_type === "video") mediaHtml = `<video src="${url}" controls style="max-width:100%; border-radius:10px; margin-bottom:6px; display:block;"></video>`;
+    else if (msg.message_type === "voice") mediaHtml = `<audio src="${url}" controls style="margin-bottom:6px;"></audio>`;
+    else mediaHtml = `<a href="${url}" target="_blank" style="display:block; margin-bottom:6px; color:var(--cyan);">📎 ${escapeHtml(att.file_name || "فایل")}</a>`;
+  }
+
   return `
-    <div class="msg-row ${own ? "own" : ""}">
+    <div class="msg-row ${own ? "own" : ""}" data-id="${msg.id}">
       <div class="bubble">
-        ${escapeHtml(msg.content || "")}
+        <div style="display:flex; gap:6px; justify-content:flex-end; margin-bottom:2px;">
+          <span onclick='startReply(${JSON.stringify(msg.id)})' style="cursor:pointer; font-size:11px; color:var(--text-faint);" title="ریپلای">↩</span>
+          <span onclick='startForward(${JSON.stringify(msg.id)})' style="cursor:pointer; font-size:11px; color:var(--text-faint);" title="فوروارد">➦</span>
+        </div>
+        ${replySnippet}
+        ${mediaHtml}
+        ${msg.content ? escapeHtml(msg.content) : ""}
         <div class="bubble-meta">${formatTime(msg.created_at)}${own ? " · " + statusIcon(msg.status) : ""}</div>
       </div>
     </div>`;
 }
 
+function bucketForType(type) {
+  return { image: "chat-images", video: "chat-videos", voice: "chat-voice" }[type] || "chat-files";
+}
+
 function statusIcon(status) {
   return { sending: "…", sent: "✓", delivered: "✓✓", read: "✓✓" }[status] || "";
+}
+
+function startReply(messageId) {
+  replyingTo = messageId;
+  const msg = messageCache[messageId];
+  document.getElementById("replyPreview").style.display = "flex";
+  document.getElementById("replyPreviewText").textContent = "ریپلای به: " + (msg?.content || "پیام").slice(0, 60);
+  document.getElementById("msgInput").focus();
+}
+
+function cancelReply() {
+  replyingTo = null;
+  document.getElementById("replyPreview").style.display = "none";
+}
+
+async function startForward(messageId) {
+  const msg = messageCache[messageId];
+  if (!msg) return;
+  const username = prompt("فوروارد به کدوم یوزرنیم؟");
+  if (!username) return;
+
+  const { data: target, error } = await window.supabaseClient
+    .from("profiles").select("id").ilike("username", username.trim()).single();
+  if (error || !target) { alert("کاربر پیدا نشد"); return; }
+
+  const { data: chatId, error: rpcErr } = await window.supabaseClient
+    .rpc("create_private_chat", { target_user_id: target.id });
+  if (rpcErr) { alert("خطا: " + rpcErr.message); return; }
+
+  const { error: sendErr } = await window.supabaseClient.from("messages").insert({
+    chat_id: chatId, sender_id: me.id, content: msg.content,
+    message_type: msg.message_type, forwarded_from: msg.id, status: "sent",
+  });
+  if (sendErr) alert("خطا در فوروارد: " + sendErr.message);
+  else alert("فوروارد شد ✓");
 }
 
 function subscribeToMessages(chatId) {
@@ -810,10 +880,15 @@ function subscribeToMessages(chatId) {
     .channel(`messages:${chatId}`)
     .on("postgres_changes",
       { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
-      (payload) => {
+      async (payload) => {
         const area = document.getElementById("messagesArea");
         if (!area) return;
-        area.insertAdjacentHTML("beforeend", renderMessageBubble(payload.new));
+        // fetch with attachments joined (realtime payload doesn't include joins)
+        const { data: full } = await window.supabaseClient
+          .from("messages").select("*, message_attachments(*)").eq("id", payload.new.id).single();
+        const msg = full || payload.new;
+        messageCache[msg.id] = msg;
+        area.insertAdjacentHTML("beforeend", renderMessageBubble(msg));
         area.scrollTop = area.scrollHeight;
       }
     )
@@ -826,14 +901,56 @@ async function sendMessage() {
   if (!content || !activeChatId) return;
   input.value = "";
 
-  const { error } = await window.supabaseClient.from("messages").insert({
+  const payload = {
     chat_id: activeChatId,
     sender_id: me.id,
     content,
     message_type: "text",
     status: "sent",
-  });
+  };
+  if (replyingTo) payload.reply_to = replyingTo;
+
+  const { error } = await window.supabaseClient.from("messages").insert(payload);
   if (error) alert("ارسال پیام ناموفق بود: " + error.message);
+  cancelReply();
+}
+
+async function handleMediaUpload(event) {
+  const file = event.target.files[0];
+  if (!file || !activeChatId) return;
+
+  if (file.size > 25 * 1024 * 1024) {
+    alert("حجم فایل نباید بیشتر از ۲۵ مگابایت باشد");
+    return;
+  }
+
+  let type = "file";
+  if (file.type.startsWith("image/")) type = "image";
+  else if (file.type.startsWith("video/")) type = "video";
+  else if (file.type.startsWith("audio/")) type = "voice";
+
+  const bucket = bucketForType(type);
+  const path = `${activeChatId}/${crypto.randomUUID()}-${file.name}`;
+
+  const { error: upErr } = await window.supabaseClient.storage.from(bucket).upload(path, file);
+  if (upErr) { alert("خطا در آپلود: " + upErr.message); return; }
+
+  const { data: newMsg, error: msgErr } = await window.supabaseClient
+    .from("messages")
+    .insert({ chat_id: activeChatId, sender_id: me.id, message_type: type, status: "sent" })
+    .select().single();
+
+  if (msgErr) { alert("خطا: " + msgErr.message); return; }
+
+  await window.supabaseClient.from("message_attachments").insert({
+    message_id: newMsg.id,
+    storage_path: path,
+    file_name: file.name,
+    file_type: file.type,
+    file_size: file.size,
+  });
+
+  event.target.value = "";
 }
 
 // ---------- utils ----------
