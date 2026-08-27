@@ -14,37 +14,42 @@
    ============================================================ */
 
 :root {
-  --bg-deep: #090c11;
-  --bg-panel: #10151d;
-  --bg-elevated: #161c26;
-  --border-soft: #232b38;
+  --bg-deep: #0E1621;
+  --bg-panel: #17212B;
+  --bg-elevated: #1F2C38;
+  --border-soft: #232E3C;
 
-  --cyan: #00e5ff;
-  --magenta: #ff2d95;
-  --success: #3ddc84;
-  --danger: #ff4d5e;
+  --cyan: #2AABEE;
+  --magenta: #229ED9;
+  --success: #4DCD5E;
+  --danger: #EB5545;
 
-  --text-primary: #e8edf4;
-  --text-dim: #8b96a8;
-  --text-faint: #586272;
+  --own-bubble: #2B5278;
+  --other-bubble: #182533;
+
+  --text-primary: #FFFFFF;
+  --text-dim: #8A9BA8;
+  --text-faint: #6C7883;
 
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 22px;
 
-  --shadow-glow: 0 0 24px rgba(0, 229, 255, 0.15);
+  --shadow-glow: 0 0 24px rgba(42, 171, 238, 0.18);
 }
 
-/* Light mode overrides */
+/* Light mode overrides (Telegram light theme) */
 [data-theme="light"] {
-  --bg-deep: #f4f6fa;
-  --bg-panel: #ffffff;
-  --bg-elevated: #ffffff;
-  --border-soft: #e2e6ee;
-  --text-primary: #10151d;
-  --text-dim: #5b6577;
-  --text-faint: #94a0b3;
-  --shadow-glow: 0 0 24px rgba(0, 150, 200, 0.08);
+  --bg-deep: #FFFFFF;
+  --bg-panel: #FFFFFF;
+  --bg-elevated: #F4F4F5;
+  --border-soft: #E4E4E6;
+  --text-primary: #000000;
+  --text-dim: #707579;
+  --text-faint: #A2ACB4;
+  --own-bubble: #EAF4FE;
+  --other-bubble: #F4F4F5;
+  --shadow-glow: 0 0 24px rgba(42, 171, 238, 0.10);
 }
 
 * { box-sizing: border-box; }
@@ -68,7 +73,7 @@ a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; }
 input, textarea, select { font-family: inherit; }
 
-::selection { background: var(--cyan); color: #04141a; }
+::selection { background: var(--cyan); color: #ffffff; }
 
 /* ---------- scrollbar ---------- */
 ::-webkit-scrollbar { width: 8px; }
@@ -106,7 +111,7 @@ input, textarea, select { font-family: inherit; }
   border-radius: 9px;
   background: linear-gradient(135deg, var(--cyan), var(--magenta));
   display: flex; align-items: center; justify-content: center;
-  font-size: 15px; color: #05080c; font-weight: 900;
+  font-size: 15px; color: #ffffff; font-weight: 900;
   box-shadow: var(--shadow-glow);
 }
 
@@ -124,8 +129,8 @@ input, textarea, select { font-family: inherit; }
 }
 .btn:hover { border-color: var(--cyan); }
 .btn-primary {
-  background: linear-gradient(135deg, var(--cyan), #00b8d4);
-  color: #04141a;
+  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  color: #ffffff;
   border: none;
 }
 .btn-primary:hover { filter: brightness(1.08); }
@@ -280,7 +285,7 @@ input, textarea, select { font-family: inherit; }
   font-weight: 600;
   color: var(--text-dim);
 }
-.auth-tab.active { background: var(--cyan); color: #04141a; }
+.auth-tab.active { background: var(--cyan); color: #ffffff; }
 
 .field { margin-bottom: 14px; }
 .field label {
@@ -361,7 +366,7 @@ input, textarea, select { font-family: inherit; }
   width: 44px; height: 44px; border-radius: 50%;
   background: linear-gradient(135deg, var(--cyan), var(--magenta));
   display: flex; align-items: center; justify-content: center;
-  font-weight: 700; color: #04141a; font-size: 15px; flex-shrink: 0;
+  font-weight: 700; color: #ffffff; font-size: 15px; flex-shrink: 0;
   position: relative;
 }
 .avatar.online::after {
@@ -380,7 +385,7 @@ input, textarea, select { font-family: inherit; }
 }
 .unread-dot {
   min-width: 20px; height: 20px; border-radius: 999px;
-  background: var(--cyan); color: #04141a;
+  background: var(--cyan); color: #ffffff;
   font-size: 11px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
 }
@@ -432,7 +437,7 @@ input, textarea, select { font-family: inherit; }
 .send-btn {
   width: 42px; height: 42px; border-radius: 50%; border: none;
   background: linear-gradient(135deg, var(--cyan), #00b8d4);
-  color: #04141a; font-size: 16px; display: flex; align-items: center; justify-content: center;
+  color: #ffffff; font-size: 16px; display: flex; align-items: center; justify-content: center;
 }
 
 .empty-state {
@@ -454,7 +459,7 @@ input, textarea, select { font-family: inherit; }
   background: linear-gradient(135deg, var(--cyan), var(--magenta));
   background-size: cover; background-position: center;
   display: flex; align-items: center; justify-content: center;
-  font-size: 34px; font-weight: 800; color: #04141a;
+  font-size: 34px; font-weight: 800; color: #ffffff;
 }
 .profile-name { text-align: center; font-size: 20px; font-weight: 800; margin-bottom: 4px; }
 .profile-status { text-align: center; color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
