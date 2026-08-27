@@ -505,6 +505,7 @@ input, textarea, select { font-family: inherit; }
     </form>
 
     <div id="authMsg" class="auth-msg"></div>
+    <div id="diagBox" style="margin-top:16px; padding:12px; border-radius:8px; background:#0d1117; border:1px solid #30363d; font-family:monospace; font-size:11px; color:#8b96a8; direction:ltr; text-align:left; white-space:pre-wrap; word-break:break-all; display:none;"></div>
   </div>
 </div>
 
@@ -614,6 +615,36 @@ redirectIfLoggedIn();
 const params = new URLSearchParams(window.location.search);
 if (params.get("tab") === "register") switchTab("register");
 
+// ---------- one-time connection diagnostic (temporary, for debugging) ----------
+(async function runDiagnostic() {
+  const box = document.getElementById("diagBox");
+  const lines = [];
+  lines.push("supabase-js loaded: " + (typeof window.supabase !== "undefined"));
+  lines.push("URL: " + window.CYBERCHAT_CONFIG.SUPABASE_URL);
+  lines.push("KEY starts with: " + window.CYBERCHAT_CONFIG.SUPABASE_ANON_KEY.slice(0, 20) + "...");
+
+  try {
+    const res = await fetch(window.CYBERCHAT_CONFIG.SUPABASE_URL + "/rest/v1/", {
+      headers: { apikey: window.CYBERCHAT_CONFIG.SUPABASE_ANON_KEY }
+    });
+    lines.push("REST test status: " + res.status);
+    const text = await res.text();
+    lines.push("REST test body: " + text.slice(0, 200));
+  } catch (err) {
+    lines.push("REST test FAILED: " + err.name + " — " + err.message);
+  }
+
+  try {
+    const { data, error } = await window.supabaseClient.auth.getSession();
+    lines.push("Auth getSession: " + (error ? "ERROR: " + error.message : "OK"));
+  } catch (err) {
+    lines.push("Auth getSession FAILED: " + err.name + " — " + err.message);
+  }
+
+  box.textContent = lines.join("\n");
+  box.style.display = "block";
+})();
+
 function switchTab(tab) {
   const isLogin = tab === "login";
   document.getElementById("tabLogin").classList.toggle("active", isLogin);
@@ -638,7 +669,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
 
   const { error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
   if (error) {
-    setMsg(translateAuthError(error.message), "error");
+    setMsg(translateAuthError(error.message) + " [" + (error.name||error.status||"?") + "]", "error");
     return;
   }
   setMsg("ورود موفق ✓", "success");
@@ -667,7 +698,7 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
   });
 
   if (error) {
-    setMsg(translateAuthError(error.message), "error");
+    setMsg(translateAuthError(error.message) + " [" + (error.name||error.status||"?") + "]", "error");
     return;
   }
 
