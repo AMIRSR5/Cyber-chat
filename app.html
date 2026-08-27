@@ -606,6 +606,10 @@ let messagesSub = null;
 
   await loadChatList();
 
+  const params = new URLSearchParams(window.location.search);
+  const openId = params.get("open");
+  if (openId) openChat(openId);
+
   document.getElementById("chatSearch").addEventListener("input", (e) => {
     filterChatList(e.target.value.trim());
   });
@@ -641,32 +645,32 @@ async function loadChatList() {
     .eq("user_id", me.id);
 
   if (error) { console.error(error); return; }
-  if (!memberships || memberships.length === 0) return;
+  if (!memberships || memberships.length === 0) { renderChatList([]); return; }
 
-  const chats = [];
-  for (const m of memberships) {
+  const privateChats = memberships.filter(m => m.chats?.type === "private");
+
+  // fetch other-member + last-message for every chat IN PARALLEL instead of one-by-one
+  const chats = (await Promise.all(privateChats.map(async (m) => {
     const chat = m.chats;
-    if (!chat || chat.type !== "private") continue;
+    const [othersRes, lastMsgRes] = await Promise.all([
+      window.supabaseClient
+        .from("chat_members")
+        .select("profiles(id, username, first_name, last_name, avatar_url, is_online, last_seen)")
+        .eq("chat_id", chat.id)
+        .neq("user_id", me.id)
+        .limit(1),
+      window.supabaseClient
+        .from("messages")
+        .select("content, created_at, sender_id, message_type")
+        .eq("chat_id", chat.id)
+        .order("created_at", { ascending: false })
+        .limit(1),
+    ]);
 
-    const { data: others } = await window.supabaseClient
-      .from("chat_members")
-      .select("profiles(id, username, first_name, last_name, is_online, last_seen)")
-      .eq("chat_id", chat.id)
-      .neq("user_id", me.id)
-      .limit(1);
-
-    const other = others?.[0]?.profiles;
-    if (!other) continue;
-
-    const { data: lastMsgArr } = await window.supabaseClient
-      .from("messages")
-      .select("content, created_at, sender_id, message_type")
-      .eq("chat_id", chat.id)
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    chats.push({ chatId: chat.id, other, lastMsg: lastMsgArr?.[0] || null });
-  }
+    const other = othersRes.data?.[0]?.profiles;
+    if (!other) return null;
+    return { chatId: chat.id, other, lastMsg: lastMsgRes.data?.[0] || null };
+  }))).filter(Boolean);
 
   chats.sort((a, b) => {
     const ta = a.lastMsg ? new Date(a.lastMsg.created_at) : 0;
@@ -715,23 +719,33 @@ function filterChatList(query) {
 
 // ---------- starting a new chat by username ----------
 async function openNewChatPrompt() {
-  const username = prompt("نام کاربری طرف مقابل را وارد کن (بدون @):");
-  if (!username) return;
+  const query = prompt("نام کاربری (بدون @) یا شماره تلفن طرف مقابل را وارد کن:");
+  if (!query) return;
+  const q = query.trim();
 
-  const { data: target, error } = await window.supabaseClient
-    .from("profiles")
-    .select("id, username, first_name, last_name")
-    .ilike("username", username.trim())
-    .single();
+  // decide whether it looks like a phone number or a username
+  const isPhone = /^[+0-9\s-]{6,}$/.test(q);
+
+  let request = window.supabaseClient.from("profiles").select("id, username, first_name, last_name");
+  request = isPhone ? request.eq("phone", q) : request.ilike("username", q);
+
+  const { data: target, error } = await request.single();
 
   if (error || !target) {
-    alert("کاربری با این نام کاربری پیدا نشد");
+    alert(isPhone
+      ? "هیچ کاربری با این شماره در Cyber Chat ثبت‌نام نکرده"
+      : "کاربری با این نام کاربری پیدا نشد");
     return;
   }
   if (target.id === me.id) {
     alert("نمی‌تونی با خودت چت بسازی 🙂");
     return;
   }
+
+  // remember as a contact for next time
+  await window.supabaseClient.from("contacts").upsert(
+    { owner_id: me.id, contact_id: target.id }, { onConflict: "owner_id,contact_id" }
+  );
 
   // atomic on the database side — avoids RLS timing issues entirely
   const { data: chatId, error: rpcErr } = await window.supabaseClient
@@ -760,10 +774,12 @@ async function openChat(chatId) {
   main.innerHTML = `
     <div class="chat-header">
       <button class="icon-btn hamburger" onclick="toggleSidebar(true)">☰</button>
-      <div class="avatar ${other?.is_online ? "online" : ""}">${initials(name)}</div>
-      <div class="chat-header-info">
-        <h3>${escapeHtml(name)}</h3>
-        <span>${other?.is_online ? "آنلاین" : "آخرین بازدید " + (other ? formatTime(other.last_seen) : "")}</span>
+      <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1;" onclick="window.location.href='user.html?id=${other?.id || ''}'">
+        <div class="avatar ${other?.is_online ? "online" : ""}">${initials(name)}</div>
+        <div class="chat-header-info">
+          <h3>${escapeHtml(name)}</h3>
+          <span>${other?.is_online ? "آنلاین" : "آخرین بازدید " + (other ? formatTime(other.last_seen) : "")}</span>
+        </div>
       </div>
     </div>
     <div class="messages-area" id="messagesArea"></div>
@@ -919,8 +935,8 @@ async function handleMediaUpload(event) {
   const file = event.target.files[0];
   if (!file || !activeChatId) return;
 
-  if (file.size > 25 * 1024 * 1024) {
-    alert("حجم فایل نباید بیشتر از ۲۵ مگابایت باشد");
+  if (file.size > 45 * 1024 * 1024) {
+    alert("حجم فایل نباید بیشتر از ۴۵ مگابایت باشد (سقف واقعی پلن رایگان Supabase، ۵۰ مگابایته)");
     return;
   }
 
