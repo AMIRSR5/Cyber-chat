@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تنظیمات — Cyber Chat</title>
+<title>حریم خصوصی و امنیت — Cyber Chat</title>
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
@@ -129,7 +129,7 @@ input, textarea, select { font-family: inherit; }
 }
 .btn:hover { border-color: var(--cyan); }
 .btn-primary {
-  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  background: linear-gradient(135deg, var(--cyan), #00b8d4);
   color: #ffffff;
   border: none;
 }
@@ -453,31 +453,16 @@ input, textarea, select { font-family: inherit; }
 
 
 .settings-page { max-width: 480px; margin: 0 auto; }
-.settings-top {
-  display: flex; align-items: center; gap: 14px; padding: 16px 20px;
-  border-bottom: 1px solid var(--border-soft);
-}
-.settings-profile-card {
-  display: flex; align-items: center; gap: 14px;
-  padding: 16px 20px; cursor: pointer;
-  border-bottom: 8px solid var(--bg-deep);
-}
-.settings-profile-card:hover { background: var(--bg-elevated); }
-.settings-profile-card .avatar { width: 58px; height: 58px; font-size: 20px; }
-.settings-profile-card .name { font-size: 17px; font-weight: 700; }
-.settings-profile-card .sub { font-size: 13px; color: var(--text-dim); }
+.settings-top { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--border-soft); }
 .settings-group { border-bottom: 8px solid var(--bg-deep); }
-.settings-row {
-  display: flex; align-items: center; gap: 14px;
-  padding: 13px 20px; border-bottom: 1px solid var(--border-soft);
-  cursor: pointer;
-}
+.settings-group-title { padding: 14px 20px 6px; font-size: 12px; color: var(--text-dim); }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--border-soft); }
 .settings-row:last-child { border-bottom: none; }
-.settings-row:hover { background: var(--bg-elevated); }
-.settings-row .icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
-.settings-row .label { flex: 1; font-size: 15px; }
-.settings-row .chevron { color: var(--text-faint); }
-.settings-row.danger .label { color: var(--danger); }
+.settings-row .label { font-size: 15px; }
+.settings-row select { background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-soft); border-radius: 8px; padding: 7px 10px; font-family: inherit; font-size: 13px; }
+.blocked-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border-soft); }
+.blocked-item:last-child { border-bottom: none; }
+.unblock-btn { margin-inline-start: auto; font-size: 12.5px; color: var(--danger); background: none; border: none; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -485,51 +470,58 @@ input, textarea, select { font-family: inherit; }
 
 <div class="settings-page">
   <div class="settings-top">
-    <button class="icon-btn" onclick="window.location.href='app.html'">→</button>
-    <h2 style="margin:0; font-size:18px;">تنظیمات</h2>
+    <button class="icon-btn" onclick="window.location.href='settings.html'">→</button>
+    <h2 style="margin:0; font-size:18px;">حریم خصوصی و امنیت</h2>
   </div>
 
-  <div class="settings-profile-card" onclick="window.location.href='profile.html'">
-    <div id="avatarBig" class="avatar">?</div>
-    <div>
-      <div class="name" id="sName">...</div>
-      <div class="sub" id="sUsername"></div>
+  <div class="settings-group">
+    <div class="settings-group-title">چه کسانی می‌بینن</div>
+    <div class="settings-row">
+      <span class="label">آخرین بازدید</span>
+      <select id="pLastSeen" onchange="savePrivacy()">
+        <option value="everyone">همه</option>
+        <option value="contacts">فقط مخاطبین</option>
+        <option value="nobody">هیچ‌کس</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <span class="label">وضعیت آنلاین</span>
+      <select id="pOnline" onchange="savePrivacy()">
+        <option value="everyone">همه</option>
+        <option value="contacts">فقط مخاطبین</option>
+        <option value="nobody">هیچ‌کس</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <span class="label">عکس پروفایل</span>
+      <select id="pPhoto" onchange="savePrivacy()">
+        <option value="everyone">همه</option>
+        <option value="contacts">فقط مخاطبین</option>
+      </select>
     </div>
   </div>
 
   <div class="settings-group">
-    <div class="settings-row" onclick="window.location.href='profile.html'">
-      <div class="icon" style="background:rgba(42,171,238,.15); color:var(--cyan);">👤</div>
-      <div class="label">ویرایش پروفایل</div>
-      <div class="chevron">‹</div>
+    <div class="settings-group-title">چه کسانی می‌تونن</div>
+    <div class="settings-row">
+      <span class="label">پیام بدن به من</span>
+      <select id="pMessage" onchange="savePrivacy()">
+        <option value="everyone">همه</option>
+        <option value="contacts">فقط مخاطبین</option>
+      </select>
     </div>
-    <div class="settings-row" onclick="toggleTheme()">
-      <div class="icon" style="background:rgba(77,205,94,.15); color:var(--success);">🌓</div>
-      <div class="label">تم تیره / روشن</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='notifications.html'">
-      <div class="icon" style="background:rgba(235,85,69,.15); color:var(--danger);">🔔</div>
-      <div class="label">اعلان‌ها</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='privacy.html'">
-      <div class="icon" style="background:rgba(140,140,140,.15); color:var(--text-dim);">🔒</div>
-      <div class="label">حریم خصوصی و امنیت</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='data-storage.html'">
-      <div class="icon" style="background:rgba(34,158,217,.15); color:var(--magenta);">💾</div>
-      <div class="label">داده‌ها و حافظه</div>
-      <div class="chevron">‹</div>
+    <div class="settings-row">
+      <span class="label">به گروه اضافه‌ام کنن</span>
+      <select id="pGroups" onchange="savePrivacy()">
+        <option value="everyone">همه</option>
+        <option value="contacts">فقط مخاطبین</option>
+      </select>
     </div>
   </div>
 
   <div class="settings-group">
-    <div class="settings-row danger" onclick="signOutCyberChat()">
-      <div class="icon" style="background:rgba(235,85,69,.15);">🚪</div>
-      <div class="label">خروج از حساب</div>
-    </div>
+    <div class="settings-group-title">کاربران مسدود‌شده</div>
+    <div id="blockedList"><div style="padding:14px 20px; color:var(--text-dim); font-size:13px;">کسی مسدود نکردی</div></div>
   </div>
 </div>
 
@@ -630,33 +622,67 @@ async function setPresence(isOnline) {
 
 </script>
 <script>
-(async function initSettings() {
+let userId = null;
+
+(async function initPrivacy() {
   const session = await requireAuth();
   if (!session) return;
   const profile = await getCurrentProfile();
   if (!profile) return;
+  userId = profile.id;
 
-  const name = `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || profile.username;
-  document.getElementById("sName").textContent = name;
-  document.getElementById("sUsername").textContent = "@" + (profile.username || "");
+  const { data: settings } = await window.supabaseClient
+    .from("user_settings").select("*").eq("user_id", userId).single();
 
-  const box = document.getElementById("avatarBig");
-  if (profile.avatar_url) {
-    box.style.backgroundImage = `url(${profile.avatar_url})`;
-  } else {
-    box.textContent = name.charAt(0).toUpperCase();
+  if (settings) {
+    document.getElementById("pLastSeen").value = settings.last_seen_privacy || "everyone";
+    document.getElementById("pOnline").value = settings.online_status_privacy || "everyone";
+    document.getElementById("pPhoto").value = settings.profile_photo_privacy || "everyone";
+    document.getElementById("pMessage").value = settings.who_can_message || "everyone";
+    document.getElementById("pGroups").value = settings.who_can_add_to_groups || "everyone";
   }
+
+  await loadBlockedUsers();
 })();
 
-function toggleTheme() {
-  const html = document.documentElement;
-  const next = html.getAttribute("data-theme") === "light" ? "dark" : "light";
-  html.setAttribute("data-theme", next);
-  localStorage.setItem("cyberchat_theme", next);
+async function savePrivacy() {
+  await window.supabaseClient.from("user_settings").update({
+    last_seen_privacy: document.getElementById("pLastSeen").value,
+    online_status_privacy: document.getElementById("pOnline").value,
+    profile_photo_privacy: document.getElementById("pPhoto").value,
+    who_can_message: document.getElementById("pMessage").value,
+    who_can_add_to_groups: document.getElementById("pGroups").value,
+  }).eq("user_id", userId);
 }
-(function applyStoredThemeOnLoad() {
-  document.documentElement.setAttribute("data-theme", localStorage.getItem("cyberchat_theme") || "dark");
-})();
+
+async function loadBlockedUsers() {
+  const { data } = await window.supabaseClient
+    .from("blocked_users")
+    .select("blocked_id, profiles:blocked_id(id, username, first_name, last_name)")
+    .eq("owner_id", userId);
+
+  if (!data || data.length === 0) return;
+
+  document.getElementById("blockedList").innerHTML = data.map(row => {
+    const p = row.profiles;
+    if (!p) return "";
+    const name = `${p.first_name || ""} ${p.last_name || ""}`.trim() || p.username;
+    return `
+      <div class="blocked-item">
+        <div class="avatar" style="width:36px;height:36px;font-size:14px;">${name.charAt(0).toUpperCase()}</div>
+        <span>${name}</span>
+        <button class="unblock-btn" onclick="unblockUser('${p.id}')">رفع مسدودیت</button>
+      </div>`;
+  }).join("");
+}
+
+async function unblockUser(targetId) {
+  await window.supabaseClient.from("blocked_users").delete().eq("owner_id", userId).eq("blocked_id", targetId);
+  await loadBlockedUsers();
+  if (document.getElementById("blockedList").innerHTML.trim() === "") {
+    document.getElementById("blockedList").innerHTML = `<div style="padding:14px 20px; color:var(--text-dim); font-size:13px;">کسی مسدود نکردی</div>`;
+  }
+}
 </script>
 </body>
 </html>

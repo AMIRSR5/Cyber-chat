@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تنظیمات — Cyber Chat</title>
+<title>اعلان‌ها — Cyber Chat</title>
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
@@ -129,7 +129,7 @@ input, textarea, select { font-family: inherit; }
 }
 .btn:hover { border-color: var(--cyan); }
 .btn-primary {
-  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  background: linear-gradient(135deg, var(--cyan), #00b8d4);
   color: #ffffff;
   border: none;
 }
@@ -453,31 +453,18 @@ input, textarea, select { font-family: inherit; }
 
 
 .settings-page { max-width: 480px; margin: 0 auto; }
-.settings-top {
-  display: flex; align-items: center; gap: 14px; padding: 16px 20px;
-  border-bottom: 1px solid var(--border-soft);
-}
-.settings-profile-card {
-  display: flex; align-items: center; gap: 14px;
-  padding: 16px 20px; cursor: pointer;
-  border-bottom: 8px solid var(--bg-deep);
-}
-.settings-profile-card:hover { background: var(--bg-elevated); }
-.settings-profile-card .avatar { width: 58px; height: 58px; font-size: 20px; }
-.settings-profile-card .name { font-size: 17px; font-weight: 700; }
-.settings-profile-card .sub { font-size: 13px; color: var(--text-dim); }
+.settings-top { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--border-soft); }
 .settings-group { border-bottom: 8px solid var(--bg-deep); }
-.settings-row {
-  display: flex; align-items: center; gap: 14px;
-  padding: 13px 20px; border-bottom: 1px solid var(--border-soft);
-  cursor: pointer;
-}
+.settings-row { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--border-soft); }
 .settings-row:last-child { border-bottom: none; }
-.settings-row:hover { background: var(--bg-elevated); }
-.settings-row .icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
 .settings-row .label { flex: 1; font-size: 15px; }
-.settings-row .chevron { color: var(--text-faint); }
-.settings-row.danger .label { color: var(--danger); }
+.settings-row .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.toggle { position: relative; width: 46px; height: 27px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle .slider { position: absolute; inset: 0; background: var(--border-soft); border-radius: 999px; cursor: pointer; transition: .2s; }
+.toggle .slider::before { content: ""; position: absolute; width: 21px; height: 21px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: .2s; }
+.toggle input:checked + .slider { background: var(--success); }
+.toggle input:checked + .slider::before { transform: translateX(-19px); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -485,50 +472,30 @@ input, textarea, select { font-family: inherit; }
 
 <div class="settings-page">
   <div class="settings-top">
-    <button class="icon-btn" onclick="window.location.href='app.html'">→</button>
-    <h2 style="margin:0; font-size:18px;">تنظیمات</h2>
-  </div>
-
-  <div class="settings-profile-card" onclick="window.location.href='profile.html'">
-    <div id="avatarBig" class="avatar">?</div>
-    <div>
-      <div class="name" id="sName">...</div>
-      <div class="sub" id="sUsername"></div>
-    </div>
+    <button class="icon-btn" onclick="window.location.href='settings.html'">→</button>
+    <h2 style="margin:0; font-size:18px;">اعلان‌ها</h2>
   </div>
 
   <div class="settings-group">
-    <div class="settings-row" onclick="window.location.href='profile.html'">
-      <div class="icon" style="background:rgba(42,171,238,.15); color:var(--cyan);">👤</div>
-      <div class="label">ویرایش پروفایل</div>
-      <div class="chevron">‹</div>
+    <div class="settings-row">
+      <div>
+        <div class="label">اعلان پیام‌های جدید</div>
+        <div class="sub">وقتی پیام جدیدی می‌رسه مطلع بشو</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="toggleMessages" onchange="saveNotifPref()">
+        <span class="slider"></span>
+      </label>
     </div>
-    <div class="settings-row" onclick="toggleTheme()">
-      <div class="icon" style="background:rgba(77,205,94,.15); color:var(--success);">🌓</div>
-      <div class="label">تم تیره / روشن</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='notifications.html'">
-      <div class="icon" style="background:rgba(235,85,69,.15); color:var(--danger);">🔔</div>
-      <div class="label">اعلان‌ها</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='privacy.html'">
-      <div class="icon" style="background:rgba(140,140,140,.15); color:var(--text-dim);">🔒</div>
-      <div class="label">حریم خصوصی و امنیت</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='data-storage.html'">
-      <div class="icon" style="background:rgba(34,158,217,.15); color:var(--magenta);">💾</div>
-      <div class="label">داده‌ها و حافظه</div>
-      <div class="chevron">‹</div>
-    </div>
-  </div>
-
-  <div class="settings-group">
-    <div class="settings-row danger" onclick="signOutCyberChat()">
-      <div class="icon" style="background:rgba(235,85,69,.15);">🚪</div>
-      <div class="label">خروج از حساب</div>
+    <div class="settings-row">
+      <div>
+        <div class="label">صدای اعلان</div>
+        <div class="sub">پخش صدا هنگام دریافت پیام</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="toggleSound" onchange="saveNotifPref()">
+        <span class="slider"></span>
+      </label>
     </div>
   </div>
 </div>
@@ -630,33 +597,33 @@ async function setPresence(isOnline) {
 
 </script>
 <script>
-(async function initSettings() {
+let userId = null;
+
+(async function initNotif() {
   const session = await requireAuth();
   if (!session) return;
   const profile = await getCurrentProfile();
   if (!profile) return;
+  userId = profile.id;
 
-  const name = `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || profile.username;
-  document.getElementById("sName").textContent = name;
-  document.getElementById("sUsername").textContent = "@" + (profile.username || "");
+  const { data: settings } = await window.supabaseClient
+    .from("user_settings").select("notifications_enabled").eq("user_id", userId).single();
 
-  const box = document.getElementById("avatarBig");
-  if (profile.avatar_url) {
-    box.style.backgroundImage = `url(${profile.avatar_url})`;
-  } else {
-    box.textContent = name.charAt(0).toUpperCase();
-  }
+  document.getElementById("toggleMessages").checked = settings?.notifications_enabled !== false;
+  document.getElementById("toggleSound").checked = localStorage.getItem("cyberchat_sound") !== "off";
 })();
 
-function toggleTheme() {
-  const html = document.documentElement;
-  const next = html.getAttribute("data-theme") === "light" ? "dark" : "light";
-  html.setAttribute("data-theme", next);
-  localStorage.setItem("cyberchat_theme", next);
+async function saveNotifPref() {
+  const messagesOn = document.getElementById("toggleMessages").checked;
+  const soundOn = document.getElementById("toggleSound").checked;
+
+  localStorage.setItem("cyberchat_sound", soundOn ? "on" : "off");
+
+  await window.supabaseClient
+    .from("user_settings")
+    .update({ notifications_enabled: messagesOn })
+    .eq("user_id", userId);
 }
-(function applyStoredThemeOnLoad() {
-  document.documentElement.setAttribute("data-theme", localStorage.getItem("cyberchat_theme") || "dark");
-})();
 </script>
 </body>
 </html>
