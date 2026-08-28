@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>پنل مدیریت — Cyber Chat</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Cyber Chat — Design tokens
+   Palette: deep signal-blue base, cyan/magenta dual accent
+   Type: Vazirmatn (Persian UI) + JetBrains Mono (labels/brand)
+   Signature: "signal ring" pulse on presence + scanline hero
+   ============================================================ */
+
+:root {
+  --bg-deep: #0E1621;
+  --bg-panel: #17212B;
+  --bg-elevated: #1F2C38;
+  --border-soft: #232E3C;
+
+  --cyan: #2AABEE;
+  --magenta: #229ED9;
+  --success: #4DCD5E;
+  --danger: #EB5545;
+
+  --own-bubble: #2B5278;
+  --other-bubble: #182533;
+
+  --text-primary: #FFFFFF;
+  --text-dim: #8A9BA8;
+  --text-faint: #6C7883;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+
+  --shadow-glow: 0 0 24px rgba(42, 171, 238, 0.18);
+}
+
+/* Light mode overrides (Telegram light theme) */
+[data-theme="light"] {
+  --bg-deep: #FFFFFF;
+  --bg-panel: #FFFFFF;
+  --bg-elevated: #F4F4F5;
+  --border-soft: #E4E4E6;
+  --text-primary: #000000;
+  --text-dim: #707579;
+  --text-faint: #A2ACB4;
+  --own-bubble: #EAF4FE;
+  --other-bubble: #F4F4F5;
+  --shadow-glow: 0 0 24px rgba(42, 171, 238, 0.10);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: "Vazirmatn", -apple-system, sans-serif;
+  direction: rtl;
+}
+
+.mono {
+  font-family: "JetBrains Mono", monospace;
+  letter-spacing: 0.02em;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; }
+input, textarea, select { font-family: inherit; }
+
+::selection { background: var(--cyan); color: #ffffff; }
+
+/* ---------- scrollbar ---------- */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-thumb { background: var(--border-soft); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ============================================================
+   Landing page
+   ============================================================ */
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 6vw;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(12px);
+  background: rgba(9, 12, 17, 0.7);
+  border-bottom: 1px solid var(--border-soft);
+}
+[data-theme="light"] .nav { background: rgba(244, 246, 250, 0.8); }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 18px;
+}
+.brand-mark {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; color: #05080c; font-weight: 900;
+  box-shadow: var(--shadow-glow);
+}
+
+.nav-actions { display: flex; gap: 10px; }
+
+.btn {
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  transition: all .15s ease;
+}
+.btn:hover { border-color: var(--cyan); }
+.btn-primary {
+  background: linear-gradient(135deg, var(--cyan), #00b8d4);
+  color: #ffffff;
+  border: none;
+}
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-ghost { border: none; color: var(--text-dim); }
+.btn-block { width: 100%; padding: 13px; font-size: 15px; }
+
+.hero {
+  position: relative;
+  padding: 90px 6vw 60px;
+  text-align: center;
+  overflow: hidden;
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 480px;
+  background:
+    repeating-linear-gradient(180deg, rgba(0,229,255,.05) 0 1px, transparent 1px 3px);
+  mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-eyebrow {
+  font-family: "JetBrains Mono", monospace;
+  color: var(--cyan);
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  margin-bottom: 18px;
+}
+.hero h1 {
+  font-size: clamp(32px, 6vw, 64px);
+  line-height: 1.15;
+  margin: 0 0 20px;
+  font-weight: 800;
+}
+.hero h1 .grad {
+  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero p {
+  max-width: 560px;
+  margin: 0 auto 34px;
+  color: var(--text-dim);
+  font-size: 17px;
+  line-height: 1.8;
+}
+.hero-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+.section { padding: 70px 6vw; }
+.section-title {
+  font-size: 28px;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 10px;
+}
+.section-sub {
+  text-align: center;
+  color: var(--text-dim);
+  margin-bottom: 44px;
+  font-size: 15px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  transition: border-color .15s ease, transform .15s ease;
+}
+.card:hover { border-color: var(--cyan); transform: translateY(-2px); }
+.card-icon {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,229,255,.1);
+  color: var(--cyan);
+  margin-bottom: 14px;
+  font-size: 18px;
+}
+.card h3 { margin: 0 0 8px; font-size: 16px; }
+.card p { margin: 0; color: var(--text-dim); font-size: 13.5px; line-height: 1.7; }
+
+.premium-band {
+  background: linear-gradient(135deg, rgba(255,45,149,.12), rgba(0,229,255,.08));
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 46px 6vw;
+  text-align: center;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.badge {
+  display: inline-block;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--magenta);
+  color: var(--magenta);
+  margin-bottom: 16px;
+}
+
+.footer {
+  border-top: 1px solid var(--border-soft);
+  padding: 30px 6vw;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+/* ============================================================
+   Auth pages
+   ============================================================ */
+.auth-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 34px 28px;
+  box-shadow: var(--shadow-glow);
+}
+.auth-tabs {
+  display: flex;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  margin-bottom: 24px;
+}
+.auth-tab {
+  flex: 1;
+  text-align: center;
+  padding: 9px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.auth-tab.active { background: var(--cyan); color: #ffffff; }
+
+.field { margin-bottom: 14px; }
+.field label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.field input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color .15s ease;
+}
+.field input:focus { border-color: var(--cyan); }
+
+.form-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; font-size: 13px; color: var(--text-dim); }
+.form-row label { display: flex; align-items: center; gap: 6px; }
+
+.auth-msg { font-size: 13px; margin-top: 14px; text-align: center; min-height: 18px; }
+.auth-msg.error { color: var(--danger); }
+.auth-msg.success { color: var(--success); }
+
+/* ============================================================
+   Messenger app shell
+   ============================================================ */
+.app-shell {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+@media (max-width: 860px) {
+  .app-shell { grid-template-columns: 1fr; }
+  .sidebar { position: fixed; inset: 0 0 0 auto; width: 86vw; max-width: 340px; z-index: 30; transform: translateX(100%); transition: transform .2s ease; }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 25; display: none; }
+  .sidebar-backdrop.show { display: block; }
+}
+
+.sidebar {
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.sidebar-search { padding: 12px 16px; }
+.sidebar-search input {
+  width: 100%; padding: 10px 14px; border-radius: 999px;
+  border: 1px solid var(--border-soft); background: var(--bg-deep);
+  color: var(--text-primary); font-size: 13.5px; outline: none;
+}
+.sidebar-tabs { display: flex; gap: 4px; padding: 0 12px 10px; }
+.sidebar-tab {
+  padding: 7px 12px; border-radius: 999px; font-size: 12.5px;
+  color: var(--text-dim); border: 1px solid transparent;
+}
+.sidebar-tab.active { background: var(--bg-elevated); color: var(--cyan); border-color: var(--border-soft); }
+
+.chat-list { flex: 1; overflow-y: auto; }
+.chat-item {
+  display: flex; gap: 12px; align-items: center;
+  padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.02);
+  transition: background .1s ease;
+}
+.chat-item:hover { background: var(--bg-elevated); }
+.avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; color: #ffffff; font-size: 15px; flex-shrink: 0;
+  position: relative;
+}
+.avatar.online::after {
+  content: "";
+  position: absolute; bottom: -1px; left: -1px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--success); border: 2px solid var(--bg-panel);
+}
+.chat-item-body { flex: 1; min-width: 0; }
+.chat-item-top { display: flex; justify-content: space-between; font-size: 14px; }
+.chat-item-name { font-weight: 600; }
+.chat-item-time { color: var(--text-faint); font-size: 11.5px; }
+.chat-item-preview {
+  color: var(--text-dim); font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.unread-dot {
+  min-width: 20px; height: 20px; border-radius: 999px;
+  background: var(--cyan); color: #ffffff;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.chat-main { display: flex; flex-direction: column; background: var(--bg-deep); }
+.chat-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px; border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-panel);
+}
+.chat-header-info h3 { margin: 0; font-size: 15px; }
+.chat-header-info span { font-size: 12px; color: var(--text-dim); }
+.icon-btn {
+  width: 36px; height: 36px; border-radius: 10px;
+  border: 1px solid var(--border-soft); background: transparent;
+  color: var(--text-dim); display: flex; align-items: center; justify-content: center;
+}
+.icon-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+
+.messages-area { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.msg-row { display: flex; }
+.msg-row.own { justify-content: flex-start; flex-direction: row-reverse; }
+.bubble {
+  max-width: 62%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+}
+.msg-row.own .bubble {
+  background: linear-gradient(135deg, rgba(0,229,255,.18), rgba(0,229,255,.08));
+  border-color: rgba(0,229,255,.3);
+}
+.bubble-meta { display: flex; gap: 6px; margin-top: 4px; font-size: 10.5px; color: var(--text-faint); justify-content: flex-end; }
+
+.composer {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; border-top: 1px solid var(--border-soft);
+  background: var(--bg-panel);
+}
+.composer input {
+  flex: 1; padding: 12px 16px; border-radius: 999px;
+  border: 1px solid var(--border-soft); background: var(--bg-deep);
+  color: var(--text-primary); font-size: 14px; outline: none;
+}
+.composer input:focus { border-color: var(--cyan); }
+.send-btn {
+  width: 42px; height: 42px; border-radius: 50%; border: none;
+  background: linear-gradient(135deg, var(--cyan), #00b8d4);
+  color: #ffffff; font-size: 16px; display: flex; align-items: center; justify-content: center;
+}
+
+.empty-state {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: var(--text-faint); gap: 10px; text-align: center; padding: 40px;
+}
+.empty-state .mark { font-size: 42px; opacity: .6; }
+
+.hamburger { display: none; }
+@media (max-width: 860px) {
+  .hamburger { display: flex; }
+}
+
+
+.admin-page { max-width: 900px; margin: 0 auto; padding-bottom: 40px; }
+.admin-top { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border-soft); }
+.admin-tabs { display: flex; gap: 6px; padding: 12px 20px; overflow-x: auto; }
+.admin-tab { padding: 8px 16px; border-radius: 999px; font-size: 13px; white-space: nowrap; border: 1px solid var(--border-soft); color: var(--text-dim); }
+.admin-tab.active { background: var(--cyan); color: #fff; border-color: var(--cyan); }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 12px; padding: 0 20px; }
+.stat-card { background: var(--bg-panel); border: 1px solid var(--border-soft); border-radius: 12px; padding: 16px; }
+.stat-card .num { font-size: 24px; font-weight: 800; color: var(--cyan); }
+.stat-card .lbl { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.admin-section { padding: 20px; }
+.admin-search { width: 100%; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--border-soft); background: var(--bg-deep); color: var(--text-primary); font-size: 15px; margin-bottom: 14px; }
+.user-row, .report-row { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 10px; margin-bottom: 8px; }
+.user-row .info { flex: 1; min-width: 0; }
+.user-row .info .n { font-weight: 700; font-size: 14px; }
+.user-row .info .u { font-size: 12px; color: var(--text-dim); }
+.badge-pill { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; }
+.badge-banned { background: rgba(235,85,69,.15); color: var(--danger); }
+.badge-premium { background: rgba(255,193,7,.15); color: #ffc107; }
+.mini-btn { font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-soft); background: transparent; color: var(--text-primary); }
+.mini-btn.danger { color: var(--danger); border-color: var(--danger); }
+.report-row { flex-direction: column; align-items: stretch; }
+.report-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+.status-pending { color: #ffc107; }
+.status-resolved { color: var(--success); }
+.status-rejected { color: var(--danger); }
+.access-denied { text-align: center; padding: 80px 20px; color: var(--text-dim); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div id="deniedScreen" style="display:none;" class="access-denied">
+  <div style="font-size:42px; margin-bottom:14px;">🚫</div>
+  دسترسی غیرمجاز — این بخش فقط برای مدیران است
+  <div style="margin-top:16px;"><button class="btn btn-primary" onclick="window.location.href='app.html'">بازگشت به برنامه</button></div>
+</div>
+
+<div id="adminApp" style="display:none;">
+  <div class="admin-page">
+    <div class="admin-top">
+      <div class="brand"><span class="brand-mark">C</span> پنل مدیریت</div>
+      <button class="icon-btn" onclick="window.location.href='app.html'">→</button>
+    </div>
+
+    <div class="admin-tabs">
+      <div class="admin-tab active" id="tabDash" onclick="switchAdminTab('dashboard')">داشبورد</div>
+      <div class="admin-tab" id="tabUsers" onclick="switchAdminTab('users')">کاربران</div>
+      <div class="admin-tab" id="tabReports" onclick="switchAdminTab('reports')">گزارش‌ها</div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="paneDashboard" class="admin-section">
+      <div class="stat-grid" id="statGrid">
+        <div class="stat-card"><div class="num">…</div><div class="lbl">در حال بارگذاری</div></div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div id="paneUsers" class="admin-section" style="display:none;">
+      <input type="text" class="admin-search" id="userSearch" placeholder="جستجو با یوزرنیم..." oninput="debounceUserSearch()">
+      <div id="userList"></div>
+    </div>
+
+    <!-- REPORTS -->
+    <div id="paneReports" class="admin-section" style="display:none;">
+      <div id="reportList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Cyber Chat — Central Config
+// Change brand / package name / Supabase keys here ONLY.
+// Nothing else in the codebase should hardcode these values.
+// ============================================================
+
+window.CYBERCHAT_CONFIG = {
+  APP_NAME: "Cyber Chat",
+  OWNER_NAME: "امیرحسین سرافرازه",
+  ANDROID_PACKAGE_NAME: "com.cyberchat.app",
+
+  // Supabase project keys — the anon key is safe to expose in a static
+  // frontend, RLS policies (see sql/schema.sql) enforce real security.
+  // Replace these two values with your own project's before deploying.
+  SUPABASE_URL: "https://rluguhuicatmjfnvxbfg.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsdWd1aHVpY2F0bWpmbnZ4YmZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NjkzODAsImV4cCI6MjEwMzM0NTM4MH0._DnqWSF23VvyUmANDamjitydNXJQNx6egMM2tzR91pc",
+
+  // Storage bucket names (create these in Supabase Storage)
+  BUCKETS: {
+    AVATARS: "avatars",
+    IMAGES: "chat-images",
+    VIDEOS: "chat-videos",
+    FILES: "chat-files",
+    VOICE: "chat-voice",
+  },
+};
+
+</script>
+<script>
+// ============================================================
+// Cyber Chat — Supabase client bootstrap
+// Loaded via CDN script tag before this file (see HTML files).
+// ============================================================
+
+const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CYBERCHAT_CONFIG;
+
+window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+  realtime: {
+    params: { eventsPerSecond: 10 },
+  },
+});
+
+// ---------- shared auth helpers ----------
+
+// Redirect to /auth.html if not logged in. Call at the top of protected pages.
+async function requireAuth() {
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session) {
+    window.location.href = "auth.html";
+    return null;
+  }
+  return session;
+}
+
+// Redirect away from auth page if already logged in.
+async function redirectIfLoggedIn() {
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (session) window.location.href = "app.html";
+}
+
+async function getCurrentProfile() {
+  const { data: { user } } = await window.supabaseClient.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await window.supabaseClient
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+  if (error) {
+    console.error("getCurrentProfile error:", error);
+    return null;
+  }
+  return data;
+}
+
+async function signOutCyberChat() {
+  await window.supabaseClient.auth.signOut();
+  window.location.href = "index.html";
+}
+
+// Mark the current user online / update last_seen. Call on load + beforeunload.
+async function setPresence(isOnline) {
+  const { data: { user } } = await window.supabaseClient.auth.getUser();
+  if (!user) return;
+  await window.supabaseClient
+    .from("profiles")
+    .update({ is_online: isOnline, last_seen: new Date().toISOString() })
+    .eq("id", user.id);
+}
+
+</script>
+<script>
+let isAdminUser = false;
+
+(async function initAdmin() {
+  const session = await requireAuth();
+  if (!session) return;
+
+  const { data: adminCheck } = await window.supabaseClient
+    .from("admin_roles").select("role").eq("user_id", session.user.id).maybeSingle();
+
+  if (!adminCheck) {
+    document.getElementById("deniedScreen").style.display = "block";
+    return;
+  }
+
+  isAdminUser = true;
+  document.getElementById("adminApp").style.display = "block";
+  await loadDashboard();
+})();
+
+function switchAdminTab(tab) {
+  document.getElementById("tabDash").classList.toggle("active", tab === "dashboard");
+  document.getElementById("tabUsers").classList.toggle("active", tab === "users");
+  document.getElementById("tabReports").classList.toggle("active", tab === "reports");
+  document.getElementById("paneDashboard").style.display = tab === "dashboard" ? "block" : "none";
+  document.getElementById("paneUsers").style.display = tab === "users" ? "block" : "none";
+  document.getElementById("paneReports").style.display = tab === "reports" ? "block" : "none";
+
+  if (tab === "users" && !document.getElementById("userList").dataset.loaded) loadUsers("");
+  if (tab === "reports") loadReports();
+}
+
+async function loadDashboard() {
+  const [usersRes, msgRes, premiumRes, pendingRes] = await Promise.all([
+    window.supabaseClient.from("profiles").select("id", { count: "exact", head: true }),
+    window.supabaseClient.from("messages").select("id", { count: "exact", head: true }),
+    window.supabaseClient.from("profiles").select("id", { count: "exact", head: true }).eq("is_premium", true),
+    window.supabaseClient.from("reports").select("id", { count: "exact", head: true }).eq("status", "pending"),
+  ]);
+
+  document.getElementById("statGrid").innerHTML = `
+    <div class="stat-card"><div class="num">${usersRes.count ?? 0}</div><div class="lbl">کل کاربران</div></div>
+    <div class="stat-card"><div class="num">${msgRes.count ?? 0}</div><div class="lbl">کل پیام‌ها</div></div>
+    <div class="stat-card"><div class="num">${premiumRes.count ?? 0}</div><div class="lbl">کاربران Premium</div></div>
+    <div class="stat-card"><div class="num">${pendingRes.count ?? 0}</div><div class="lbl">گزارش‌های در انتظار</div></div>
+  `;
+}
+
+let userSearchTimer = null;
+function debounceUserSearch() {
+  clearTimeout(userSearchTimer);
+  userSearchTimer = setTimeout(() => loadUsers(document.getElementById("userSearch").value.trim()), 300);
+}
+
+async function loadUsers(query) {
+  document.getElementById("userList").dataset.loaded = "1";
+  let req = window.supabaseClient.from("profiles")
+    .select("id, username, first_name, last_name, is_banned, is_premium, created_at")
+    .order("created_at", { ascending: false }).limit(50);
+  if (query) req = req.ilike("username", `%${query}%`);
+
+  const { data, error } = await req;
+  const list = document.getElementById("userList");
+  if (error || !data || data.length === 0) {
+    list.innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align:center;">کاربری پیدا نشد</div>`;
+    return;
+  }
+
+  list.innerHTML = data.map(u => {
+    const name = `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username;
+    return `
+      <div class="user-row">
+        <div class="avatar" style="width:40px;height:40px;font-size:15px;">${name.charAt(0).toUpperCase()}</div>
+        <div class="info">
+          <div class="n">${escapeHtml(name)} ${u.is_banned ? '<span class="badge-pill badge-banned">مسدود</span>' : ""} ${u.is_premium ? '<span class="badge-pill badge-premium">Premium</span>' : ""}</div>
+          <div class="u">@${escapeHtml(u.username || "")}</div>
+        </div>
+        <button class="mini-btn ${u.is_banned ? "" : "danger"}" onclick="toggleBan('${u.id}', ${u.is_banned})">${u.is_banned ? "رفع مسدودیت" : "مسدود کن"}</button>
+        <button class="mini-btn" onclick="togglePremium('${u.id}', ${u.is_premium})">${u.is_premium ? "لغو Premium" : "فعال‌سازی Premium"}</button>
+      </div>`;
+  }).join("");
+}
+
+async function toggleBan(userId, currentlyBanned) {
+  const { error } = await window.supabaseClient
+    .from("profiles").update({ is_banned: !currentlyBanned }).eq("id", userId);
+  if (error) { alert("خطا: " + error.message); return; }
+  loadUsers(document.getElementById("userSearch").value.trim());
+}
+
+async function togglePremium(userId, currentlyPremium) {
+  const { error } = await window.supabaseClient
+    .from("profiles").update({
+      is_premium: !currentlyPremium,
+      premium_started_at: !currentlyPremium ? new Date().toISOString() : null,
+    }).eq("id", userId);
+  if (error) { alert("خطا: " + error.message); return; }
+  loadUsers(document.getElementById("userSearch").value.trim());
+}
+
+async function loadReports() {
+  const { data, error } = await window.supabaseClient
+    .from("reports")
+    .select("id, target_type, target_id, reason, status, created_at, reporter:reporter_id(username)")
+    .order("created_at", { ascending: false }).limit(50);
+
+  const list = document.getElementById("reportList");
+  if (error || !data || data.length === 0) {
+    list.innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align:center;">گزارشی وجود ندارد</div>`;
+    return;
+  }
+
+  const statusLabel = { pending: "در انتظار", reviewing: "در حال بررسی", resolved: "حل‌شده", rejected: "رد‌شده" };
+
+  list.innerHTML = data.map(r => `
+    <div class="report-row">
+      <div class="report-top">
+        <span>گزارش ${r.target_type} از طرف @${escapeHtml(r.reporter?.username || "?")}</span>
+        <span class="status-${r.status}">${statusLabel[r.status] || r.status}</span>
+      </div>
+      <div style="font-size:13px; color:var(--text-dim); margin-bottom:8px;">${escapeHtml(r.reason || "بدون توضیح")}</div>
+      <div style="display:flex; gap:8px;">
+        <button class="mini-btn" onclick="updateReport('${r.id}', 'resolved')">تأیید و حل شد</button>
+        <button class="mini-btn danger" onclick="updateReport('${r.id}', 'rejected')">رد کردن</button>
+      </div>
+    </div>`).join("");
+}
+
+async function updateReport(reportId, status) {
+  await window.supabaseClient.from("reports")
+    .update({ status, resolved_at: new Date().toISOString() }).eq("id", reportId);
+  loadReports();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>

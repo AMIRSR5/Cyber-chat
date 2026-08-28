@@ -322,14 +322,21 @@ input, textarea, select { font-family: inherit; }
   grid-template-columns: 320px 1fr;
   height: 100vh;
   height: 100dvh;
+  height: calc(var(--app-height, 100vh));
   overflow: hidden;
 }
 @media (max-width: 860px) {
   .app-shell { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; inset: 0 0 0 auto; width: 86vw; max-width: 340px; z-index: 30; transform: translateX(100%); transition: transform .2s ease; }
-  .sidebar.open { transform: translateX(0); }
-  .sidebar-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 25; display: none; }
-  .sidebar-backdrop.show { display: block; }
+  /* Mobile is a screen-stack: list is the home screen, chat is pushed on top. */
+  .sidebar { position: fixed; inset: 0; width: 100%; max-width: none; z-index: 20; transform: none; }
+  .sidebar.chat-open { transform: translateX(100%); transition: transform .2s ease; }
+  .chat-main { position: fixed; inset: 0; z-index: 25; transform: translateX(100%); transition: transform .2s ease; }
+  .chat-main.active { transform: translateX(0); }
+  .sidebar-backdrop { display: none !important; }
+}
+
+@media (min-width: 861px) {
+  .bottom-nav { display: none; }
 }
 
 .sidebar {
@@ -476,7 +483,20 @@ input, textarea, select { font-family: inherit; }
 </head>
 <body>
 
-<div class="sidebar-backdrop" id="backdrop" onclick="toggleSidebar(false)"></div>
+<div class="sidebar-backdrop" id="backdrop"></div>
+
+<div id="newChatScreen" style="display:none; position:fixed; inset:0; z-index:40; background:var(--bg-panel); flex-direction:column;">
+  <div class="settings-top" style="border-bottom:1px solid var(--border-soft);">
+    <button class="icon-btn" onclick="closeNewChatSearch()">→</button>
+    <h2 style="margin:0; font-size:16px;">گفتگوی جدید</h2>
+  </div>
+  <div class="sidebar-search">
+    <input type="text" id="newChatQuery" placeholder="نام کاربری یا شماره تلفن..." oninput="debounceNewChatSearch()">
+  </div>
+  <div id="newChatResults" style="flex:1; overflow-y:auto;">
+    <div class="empty-state" style="height:auto; padding-top:60px;"><div class="mark">🔍</div>یوزرنیم یا شماره تلفن رو تایپ کن</div>
+  </div>
+</div>
 
 <div class="app-shell">
   <aside class="sidebar" id="sidebar">
@@ -484,7 +504,7 @@ input, textarea, select { font-family: inherit; }
       <div class="brand"><span class="brand-mark">C</span> Cyber Chat</div>
       <div style="display:flex; gap:8px;">
         <button class="icon-btn" onclick="toggleTheme()" title="تغییر تم">🌓</button>
-        <button class="icon-btn" onclick="openNewChatPrompt()" title="گفتگوی جدید">✎</button>
+        <button class="icon-btn" onclick="openNewChatSearch()" title="گفتگوی جدید">✎</button>
       </div>
     </div>
     <div class="sidebar-search">
@@ -516,7 +536,6 @@ input, textarea, select { font-family: inherit; }
     <div class="empty-state">
       <div class="mark">◈</div>
       یک گفتگو را انتخاب کن یا چت جدید بساز
-      <button class="hamburger btn btn-primary" onclick="toggleSidebar(true)" style="margin-top:10px">باز کردن لیست</button>
     </div>
   </main>
 </div>
@@ -627,6 +646,15 @@ let me = null;
 let activeChatId = null;
 let messagesSub = null;
 
+// Robust mobile viewport height (fixes iOS Safari keyboard/toolbar layout freezes)
+function setAppHeight() {
+  const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  document.documentElement.style.setProperty("--app-height", h + "px");
+}
+setAppHeight();
+window.addEventListener("resize", setAppHeight);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", setAppHeight);
+
 (async function init() {
   const session = await requireAuth();
   if (!session) return;
@@ -649,10 +677,20 @@ let messagesSub = null;
   });
 })();
 
-// ---------- sidebar / mobile ----------
+// ---------- mobile screen-stack: list <-> open chat ----------
+function openChatMobile() {
+  document.getElementById("sidebar").classList.add("chat-open");
+  document.getElementById("chatMain").classList.add("active");
+}
+function closeChatMobile() {
+  document.getElementById("sidebar").classList.remove("chat-open");
+  document.getElementById("chatMain").classList.remove("active");
+  activeChatId = null;
+  if (messagesSub) window.supabaseClient.removeChannel(messagesSub);
+}
+// kept for any old callers; no-op now since list is always visible on mobile
 function toggleSidebar(open) {
-  document.getElementById("sidebar").classList.toggle("open", open);
-  document.getElementById("backdrop").classList.toggle("show", open);
+  if (!open) closeChatMobile();
 }
 
 // ---------- bottom nav: Chats <-> Contacts ----------
@@ -804,41 +842,69 @@ function filterChatList(query) {
 }
 
 // ---------- starting a new chat by username ----------
-async function openNewChatPrompt() {
-  const query = prompt("نام کاربری (بدون @) یا شماره تلفن طرف مقابل را وارد کن:");
-  if (!query) return;
-  const q = query.trim();
+function openNewChatSearch() {
+  document.getElementById("newChatScreen").style.display = "flex";
+  document.getElementById("newChatQuery").value = "";
+  document.getElementById("newChatQuery").focus();
+  document.getElementById("newChatResults").innerHTML =
+    `<div class="empty-state" style="height:auto; padding-top:60px;"><div class="mark">🔍</div>یوزرنیم یا شماره تلفن رو تایپ کن</div>`;
+}
+function closeNewChatSearch() {
+  document.getElementById("newChatScreen").style.display = "none";
+}
 
-  // decide whether it looks like a phone number or a username
-  const isPhone = /^[+0-9\s-]{6,}$/.test(q);
+let newChatDebounceTimer = null;
+function debounceNewChatSearch() {
+  clearTimeout(newChatDebounceTimer);
+  newChatDebounceTimer = setTimeout(runNewChatSearch, 350);
+}
 
-  let request = window.supabaseClient.from("profiles").select("id, username, first_name, last_name");
-  request = isPhone ? request.eq("phone", q) : request.ilike("username", q);
-
-  const { data: target, error } = await request.single();
-
-  if (error || !target) {
-    alert(isPhone
-      ? "هیچ کاربری با این شماره در Cyber Chat ثبت‌نام نکرده"
-      : "کاربری با این نام کاربری پیدا نشد");
+async function runNewChatSearch() {
+  const q = document.getElementById("newChatQuery").value.trim();
+  const results = document.getElementById("newChatResults");
+  if (!q) {
+    results.innerHTML = `<div class="empty-state" style="height:auto; padding-top:60px;"><div class="mark">🔍</div>یوزرنیم یا شماره تلفن رو تایپ کن</div>`;
     return;
   }
-  if (target.id === me.id) {
-    alert("نمی‌تونی با خودت چت بسازی 🙂");
+
+  const isPhone = /^[+0-9\s-]{4,}$/.test(q);
+  let query = window.supabaseClient.from("profiles")
+    .select("id, username, first_name, last_name, avatar_url, is_online")
+    .neq("id", me.id).limit(20);
+  query = isPhone ? query.ilike("phone", `%${q}%`) : query.ilike("username", `%${q}%`);
+
+  const { data, error } = await query;
+
+  if (error || !data || data.length === 0) {
+    results.innerHTML = `<div class="empty-state" style="height:auto; padding-top:60px;"><div class="mark">🚫</div>کسی پیدا نشد</div>`;
     return;
   }
 
-  // remember as a contact for next time
+  results.innerHTML = data.map(u => {
+    const name = `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username;
+    const avatarStyle = u.avatar_url ? `style="background-image:url(${u.avatar_url})"` : "";
+    return `
+      <div class="chat-item" onclick="startChatFromSearch('${u.id}')">
+        <div class="avatar ${u.is_online ? "online" : ""}" ${avatarStyle}>${u.avatar_url ? "" : initials(name)}</div>
+        <div class="chat-item-body">
+          <div class="chat-item-top"><span class="chat-item-name">${escapeHtml(name)}</span></div>
+          <div class="chat-item-preview">@${escapeHtml(u.username || "")}</div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+async function startChatFromSearch(targetId) {
   await window.supabaseClient.from("contacts").upsert(
-    { owner_id: me.id, contact_id: target.id }, { onConflict: "owner_id,contact_id" }
+    { owner_id: me.id, contact_id: targetId }, { onConflict: "owner_id,contact_id" }
   );
 
-  // atomic on the database side — avoids RLS timing issues entirely
   const { data: chatId, error: rpcErr } = await window.supabaseClient
-    .rpc("create_private_chat", { target_user_id: target.id });
+    .rpc("create_private_chat", { target_user_id: targetId });
 
   if (rpcErr) { alert("خطا در ساخت چت: " + rpcErr.message); return; }
 
+  closeNewChatSearch();
   await loadChatList();
   openChat(chatId);
 }
@@ -850,7 +916,7 @@ let replyingTo = null;
 async function openChat(chatId) {
   activeChatId = chatId;
   replyingTo = null;
-  toggleSidebar(false);
+  openChatMobile();
 
   const chatInfo = chatCache.find(c => c.chatId === chatId);
   const other = chatInfo?.other;
@@ -860,7 +926,7 @@ async function openChat(chatId) {
   const main = document.getElementById("chatMain");
   main.innerHTML = `
     <div class="chat-header">
-      <button class="icon-btn hamburger" onclick="toggleSidebar(true)">☰</button>
+      <button class="icon-btn" onclick="closeChatMobile()">→</button>
       <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1;" onclick="window.location.href='user.html?id=${other?.id || ''}'">
         <div class="avatar ${other?.is_online ? "online" : ""}" ${headerAvatarStyle}>${other?.avatar_url ? "" : initials(name)}</div>
         <div class="chat-header-info">
@@ -868,7 +934,6 @@ async function openChat(chatId) {
           <span>${other?.is_online ? "آنلاین" : "آخرین بازدید " + (other ? formatTime(other.last_seen) : "")}</span>
         </div>
       </div>
-    </div>
     </div>
     <div class="messages-area" id="messagesArea"></div>
     <div id="replyPreview" style="display:none; padding:8px 16px; background:var(--bg-elevated); border-top:1px solid var(--border-soft); font-size:12.5px; color:var(--text-dim); display:flex; justify-content:space-between; align-items:center;">
@@ -885,6 +950,7 @@ async function openChat(chatId) {
 
   await loadMessages(chatId);
   subscribeToMessages(chatId);
+  attachSwipeHandlers(document.getElementById("messagesArea"));
 }
 
 async function loadMessages(chatId) {
@@ -947,6 +1013,37 @@ function bucketForType(type) {
 
 function statusIcon(status) {
   return { sending: "…", sent: "✓", delivered: "✓✓", read: "✓✓" }[status] || "";
+}
+
+// ---------- swipe-left-to-reply (Telegram-style gesture) ----------
+function attachSwipeHandlers(container) {
+  if (!container) return;
+  let startX = 0, activeBubble = null, activeRow = null, swiping = false;
+
+  container.addEventListener("touchstart", (e) => {
+    const row = e.target.closest(".msg-row");
+    if (!row) return;
+    activeRow = row;
+    activeBubble = row.querySelector(".bubble");
+    startX = e.touches[0].clientX;
+    swiping = true;
+  }, { passive: true });
+
+  container.addEventListener("touchmove", (e) => {
+    if (!swiping || !activeBubble) return;
+    const dx = e.touches[0].clientX - startX;
+    if (dx < 0) activeBubble.style.transform = `translateX(${Math.max(dx, -60)}px)`;
+  }, { passive: true });
+
+  container.addEventListener("touchend", (e) => {
+    if (!swiping || !activeBubble) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    activeBubble.style.transition = "transform .15s ease";
+    activeBubble.style.transform = "translateX(0)";
+    setTimeout(() => { if (activeBubble) activeBubble.style.transition = ""; }, 200);
+    if (dx < -45) startReply(activeRow.dataset.id);
+    swiping = false; activeBubble = null; activeRow = null;
+  });
 }
 
 function startReply(messageId) {
