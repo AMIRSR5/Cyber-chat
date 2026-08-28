@@ -623,7 +623,8 @@ let viewedUserId = null;
 
   const name = `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || profile.username;
   document.getElementById("profileName").textContent = name;
-  document.getElementById("profileStatus").textContent = profile.is_online
+  const stillOnline = profile.is_online && (Date.now() - new Date(profile.last_seen).getTime()) < 35000;
+  document.getElementById("profileStatus").textContent = stillOnline
     ? "آنلاین"
     : "آخرین بازدید " + new Date(profile.last_seen).toLocaleString("fa-IR");
 

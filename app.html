@@ -349,7 +349,7 @@ input, textarea, select { font-family: inherit; }
 }
 .fab {
   position: absolute;
-  bottom: 78px;
+  bottom: 92px;
   left: 20px;
   width: 56px; height: 56px; border-radius: 50%;
   background: linear-gradient(135deg, var(--cyan), var(--magenta));
@@ -359,17 +359,29 @@ input, textarea, select { font-family: inherit; }
   z-index: 10;
 }
 .bottom-nav {
+  position: absolute;
+  bottom: 10px; left: 12px; right: 12px;
   display: flex;
-  border-top: 1px solid var(--border-soft);
-  background: var(--bg-panel);
-  flex-shrink: 0;
+  border-radius: 22px;
+  background: rgba(23, 33, 43, 0.68);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  z-index: 9;
+}
+[data-theme="light"] .bottom-nav {
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
 }
 .bottom-nav-item {
-  flex: 1; background: none; border: none; padding: 8px 0 10px;
+  flex: 1; background: none; border: none; padding: 9px 0 10px;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   color: var(--text-faint); font-size: 11px; font-family: inherit;
 }
 .bottom-nav-item.active { color: var(--cyan); }
+.chat-list { padding-bottom: 76px; }
 .bottom-nav-icon { font-size: 20px; }
 .sidebar-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -695,6 +707,31 @@ async function setPresence(isOnline) {
 // ============================================================
 
 let me = null;
+let presenceInterval = null;
+
+function startPresenceHeartbeat() {
+  setPresence(true);
+  if (presenceInterval) clearInterval(presenceInterval);
+  presenceInterval = setInterval(() => setPresence(true), 25000);
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    setPresence(false);
+    if (presenceInterval) clearInterval(presenceInterval);
+  } else if (me) {
+    startPresenceHeartbeat();
+  }
+});
+window.addEventListener("pagehide", () => setPresence(false));
+window.addEventListener("beforeunload", () => setPresence(false));
+
+// Trust is_online only if the heartbeat is recent — protects against a flag
+// that never got cleared (app killed, network dropped, etc).
+function isActuallyOnline(profile) {
+  if (!profile?.is_online || !profile?.last_seen) return false;
+  return (Date.now() - new Date(profile.last_seen).getTime()) < 35000;
+}
+
 let activeChatId = null;
 let messagesSub = null;
 
@@ -715,8 +752,7 @@ if (window.visualViewport) window.visualViewport.addEventListener("resize", setA
   if (!me) return;
 
   applyStoredTheme();
-  await setPresence(true);
-  window.addEventListener("beforeunload", () => setPresence(false));
+  startPresenceHeartbeat();
 
   await loadChatList();
   await loadStoriesBar();
@@ -879,7 +915,7 @@ function renderChatList(chats) {
           <button class="delete-btn" onclick="event.stopPropagation(); deleteChat('${c.chatId}')">🗑️</button>
         </div>
         <div class="chat-item" onclick="handleChatItemClick(event, '${c.chatId}', this)">
-          <div class="avatar ${c.other.is_online ? "online" : ""}" ${avatarStyle}>${c.other.avatar_url ? "" : initials(name)}</div>
+          <div class="avatar ${isActuallyOnline(c.other) ? "online" : ""}" ${avatarStyle}>${c.other.avatar_url ? "" : initials(name)}</div>
           <div class="chat-item-body">
             <div class="chat-item-top">
               <span class="chat-item-name">${escapeHtml(name)} ${c.is_muted ? "🔕" : ""}</span>
@@ -1121,7 +1157,7 @@ async function runNewChatSearch() {
     const avatarStyle = u.avatar_url ? `style="background-image:url(${u.avatar_url})"` : "";
     return `
       <div class="chat-item" onclick="startChatFromSearch('${u.id}')">
-        <div class="avatar ${u.is_online ? "online" : ""}" ${avatarStyle}>${u.avatar_url ? "" : initials(name)}</div>
+        <div class="avatar ${isActuallyOnline(u) ? "online" : ""}" ${avatarStyle}>${u.avatar_url ? "" : initials(name)}</div>
         <div class="chat-item-body">
           <div class="chat-item-top"><span class="chat-item-name">${escapeHtml(name)}</span></div>
           <div class="chat-item-preview">@${escapeHtml(u.username || "")}</div>
@@ -1165,10 +1201,10 @@ async function openChat(chatId, override) {
     <div class="chat-header">
       <button class="icon-btn" onclick="closeChatMobile()">→</button>
       <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1;" ${headerClickAttr}>
-        <div class="avatar ${other?.is_online ? "online" : ""}" ${headerAvatarStyle}>${override?.icon || (other?.avatar_url ? "" : initials(name))}</div>
+        <div class="avatar ${isActuallyOnline(other) ? "online" : ""}" ${headerAvatarStyle}>${override?.icon || (other?.avatar_url ? "" : initials(name))}</div>
         <div class="chat-header-info">
           <h3>${escapeHtml(name)}</h3>
-          <span>${override ? "" : (other?.is_online ? "آنلاین" : "آخرین بازدید " + (other ? formatTime(other.last_seen) : ""))}</span>
+          <span>${override ? "" : (isActuallyOnline(other) ? "آنلاین" : "آخرین بازدید " + (other ? formatTime(other.last_seen) : ""))}</span>
         </div>
       </div>
     </div>
@@ -1328,6 +1364,13 @@ function subscribeToMessages(chatId) {
       async (payload) => {
         const area = document.getElementById("messagesArea");
         if (!area) return;
+        // already rendered optimistically by sendMessage() on this device — skip re-render
+        if (document.querySelector(`[data-id="${payload.new.id}"]`)) {
+          const { data: full } = await window.supabaseClient
+            .from("messages").select("*, message_attachments(*)").eq("id", payload.new.id).single();
+          if (full) messageCache[full.id] = full;
+          return;
+        }
         // fetch with attachments joined (realtime payload doesn't include joins)
         const { data: full } = await window.supabaseClient
           .from("messages").select("*, message_attachments(*)").eq("id", payload.new.id).single();
@@ -1346,7 +1389,23 @@ async function sendMessage() {
   if (!content || !activeChatId) return;
   input.value = "";
 
+  // render immediately (optimistic) instead of waiting for the realtime echo,
+  // which can lag a few seconds — we generate the id ourselves so the
+  // realtime INSERT event for this same row is recognized and skipped.
+  const tempId = crypto.randomUUID();
+  const optimisticMsg = {
+    id: tempId, chat_id: activeChatId, sender_id: me.id, content,
+    message_type: "text", status: "sending", created_at: new Date().toISOString(),
+  };
+  messageCache[tempId] = optimisticMsg;
+  const area = document.getElementById("messagesArea");
+  if (area) {
+    area.insertAdjacentHTML("beforeend", renderMessageBubble(optimisticMsg));
+    area.scrollTop = area.scrollHeight;
+  }
+
   const payload = {
+    id: tempId,
     chat_id: activeChatId,
     sender_id: me.id,
     content,
@@ -1354,10 +1413,24 @@ async function sendMessage() {
     status: "sent",
   };
   if (replyingTo) payload.reply_to = replyingTo;
+  const usedReply = replyingTo;
+  cancelReply();
 
   const { error } = await window.supabaseClient.from("messages").insert(payload);
-  if (error) alert("ارسال پیام ناموفق بود: " + error.message);
-  cancelReply();
+
+  if (error) {
+    alert("ارسال پیام ناموفق بود: " + error.message);
+    const row = document.querySelector(`[data-id="${tempId}"]`);
+    if (row) row.remove();
+    delete messageCache[tempId];
+    return;
+  }
+
+  const row = document.querySelector(`[data-id="${tempId}"]`);
+  if (row) {
+    const meta = row.querySelector(".bubble-meta");
+    if (meta) meta.textContent = formatTime(optimisticMsg.created_at) + " · ✓";
+  }
 }
 
 async function handleMediaUpload(event) {
