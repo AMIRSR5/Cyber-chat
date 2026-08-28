@@ -337,6 +337,7 @@ input, textarea, select { font-family: inherit; }
 
 @media (min-width: 861px) {
   .bottom-nav { display: none; }
+  .fab { bottom: 20px; }
 }
 
 .sidebar {
@@ -344,6 +345,18 @@ input, textarea, select { font-family: inherit; }
   border-left: 1px solid var(--border-soft);
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+.fab {
+  position: absolute;
+  bottom: 78px;
+  left: 20px;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  color: #fff; font-size: 22px; border: none;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  z-index: 10;
 }
 .bottom-nav {
   display: flex;
@@ -377,12 +390,49 @@ input, textarea, select { font-family: inherit; }
 .sidebar-tab.active { background: var(--bg-elevated); color: var(--cyan); border-color: var(--border-soft); }
 
 .chat-list { flex: 1; overflow-y: auto; }
+.chat-row-wrap { position: relative; overflow: hidden; }
+.chat-row-actions {
+  position: absolute; inset: 0; display: flex; justify-content: flex-end; align-items: stretch;
+}
+.chat-row-actions button {
+  width: 70px; border: none; color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center;
+}
+.chat-row-actions .mute-btn { background: #ffc107; }
+.chat-row-actions .delete-btn { background: var(--danger); }
 .chat-item {
   display: flex; gap: 13px; align-items: center;
   padding: 10px 14px; border-bottom: 1px solid var(--border-soft);
-  transition: background .1s ease;
+  transition: transform .15s ease;
+  background: var(--bg-panel);
+  position: relative; z-index: 1;
 }
 .chat-item:hover { background: var(--bg-elevated); }
+.stories-bar { display: flex; gap: 14px; padding: 12px 16px; overflow-x: auto; border-bottom: 1px solid var(--border-soft); }
+.story-avatar-wrap { display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; width: 60px; }
+.story-ring {
+  width: 56px; height: 56px; border-radius: 50%; padding: 2px;
+  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  display: flex; align-items: center; justify-content: center;
+}
+.story-ring.seen { background: var(--border-soft); }
+.story-ring .avatar { width: 100%; height: 100%; border: 2px solid var(--bg-panel); }
+.story-label { font-size: 10.5px; color: var(--text-dim); max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.story-add-badge {
+  position: relative;
+}
+.story-add-badge::after {
+  content: "+"; position: absolute; bottom: -1px; left: -1px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--cyan); color: #fff; font-size: 13px; display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--bg-panel);
+}
+.story-viewer {
+  position: fixed; inset: 0; z-index: 100; background: #000;
+  display: flex; align-items: center; justify-content: center;
+}
+.story-viewer img, .story-viewer video { max-width: 100%; max-height: 100%; object-fit: contain; }
+.story-progress { position: absolute; top: 10px; left: 10px; right: 10px; height: 3px; background: rgba(255,255,255,.25); border-radius: 2px; overflow: hidden; }
+.story-progress-fill { height: 100%; width: 0%; background: #fff; }
+.story-close { position: absolute; top: 16px; left: 16px; color: #fff; font-size: 24px; background: none; border: none; z-index: 5; }
 .avatar {
   width: 52px; height: 52px; border-radius: 50%;
   background: linear-gradient(135deg, var(--cyan), var(--magenta));
@@ -504,17 +554,19 @@ input, textarea, select { font-family: inherit; }
       <div class="brand"><span class="brand-mark">C</span> Cyber Chat</div>
       <div style="display:flex; gap:8px;">
         <button class="icon-btn" onclick="toggleTheme()" title="تغییر تم">🌓</button>
-        <button class="icon-btn" onclick="openNewChatSearch()" title="گفتگوی جدید">✎</button>
       </div>
     </div>
     <div class="sidebar-search">
       <input type="text" id="chatSearch" placeholder="جستجو در گفتگوها و کاربران...">
     </div>
+    <button class="fab" onclick="openNewChatSearch()" title="گفتگوی جدید">✎</button>
     <div class="sidebar-tabs">
       <div class="sidebar-tab active">چت‌ها</div>
       <div class="sidebar-tab" title="فاز بعدی">گروه‌ها</div>
       <div class="sidebar-tab" title="فاز بعدی">کانال‌ها</div>
     </div>
+    <div class="stories-bar" id="storiesBar"></div>
+    <input type="file" id="storyFileInput" accept="image/*" style="display:none" onchange="handleStoryUpload(event)">
     <div class="chat-list" id="chatList">
       <div class="empty-state"><div class="mark">💬</div>هنوز گفتگویی نداری<br>روی ✎ بزن و یک چت جدید بساز</div>
     </div>
@@ -667,6 +719,7 @@ if (window.visualViewport) window.visualViewport.addEventListener("resize", setA
   window.addEventListener("beforeunload", () => setPresence(false));
 
   await loadChatList();
+  await loadStoriesBar();
 
   const params = new URLSearchParams(window.location.search);
   const openId = params.get("open");
@@ -761,45 +814,33 @@ function applyStoredTheme() {
 let chatCache = [];
 
 async function loadChatList() {
-  // all chats I'm a member of, with the other member's profile (private chats only, phase 1)
-  const { data: memberships, error } = await window.supabaseClient
-    .from("chat_members")
-    .select("chat_id, chats(id, type, created_at)")
-    .eq("user_id", me.id);
+  document.getElementById("chatList").innerHTML =
+    `<div class="empty-state"><div class="mark">💬</div>در حال بارگذاری...</div>`;
 
-  if (error) { console.error(error); return; }
-  if (!memberships || memberships.length === 0) { renderChatList([]); return; }
+  // single round-trip RPC — critical for connections with high latency
+  const { data, error } = await window.supabaseClient.rpc("get_my_chat_list");
 
-  const privateChats = memberships.filter(m => m.chats?.type === "private");
+  if (error) { console.error(error); renderChatList([]); return; }
+  if (!data || data.length === 0) { chatCache = []; renderChatList([]); return; }
 
-  // fetch other-member + last-message for every chat IN PARALLEL instead of one-by-one
-  const chats = (await Promise.all(privateChats.map(async (m) => {
-    const chat = m.chats;
-    const [othersRes, lastMsgRes] = await Promise.all([
-      window.supabaseClient
-        .from("chat_members")
-        .select("profiles(id, username, first_name, last_name, avatar_url, is_online, last_seen)")
-        .eq("chat_id", chat.id)
-        .neq("user_id", me.id)
-        .limit(1),
-      window.supabaseClient
-        .from("messages")
-        .select("content, created_at, sender_id, message_type")
-        .eq("chat_id", chat.id)
-        .order("created_at", { ascending: false })
-        .limit(1),
-    ]);
-
-    const other = othersRes.data?.[0]?.profiles;
-    if (!other) return null;
-    return { chatId: chat.id, other, lastMsg: lastMsgRes.data?.[0] || null };
-  }))).filter(Boolean);
-
-  chats.sort((a, b) => {
-    const ta = a.lastMsg ? new Date(a.lastMsg.created_at) : 0;
-    const tb = b.lastMsg ? new Date(b.lastMsg.created_at) : 0;
-    return tb - ta;
-  });
+  const chats = data.map(row => ({
+    chatId: row.chat_id,
+    is_muted: row.is_muted,
+    other: {
+      id: row.other_id,
+      username: row.other_username,
+      first_name: row.other_first_name,
+      last_name: row.other_last_name,
+      avatar_url: row.other_avatar_url,
+      is_online: row.other_is_online,
+      last_seen: row.other_last_seen,
+    },
+    lastMsg: row.last_created_at ? {
+      content: row.last_content,
+      message_type: row.last_message_type,
+      created_at: row.last_created_at,
+    } : null,
+  }));
 
   chatCache = chats;
   renderChatList(chats);
@@ -807,11 +848,24 @@ async function loadChatList() {
 
 function renderChatList(chats) {
   const list = document.getElementById("chatList");
+
+  const savedRow = `
+    <div class="chat-row-wrap">
+      <div class="chat-item" onclick="openSavedMessages()">
+        <div class="avatar" style="background:linear-gradient(135deg, var(--cyan), var(--magenta));">🔖</div>
+        <div class="chat-item-body">
+          <div class="chat-item-top"><span class="chat-item-name">پیام‌های ذخیره‌شده</span></div>
+          <div class="chat-item-preview">یادداشت‌ها و فایل‌های شخصی خودت</div>
+        </div>
+      </div>
+    </div>`;
+
   if (chats.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="mark">💬</div>هنوز گفتگویی نداری<br>روی ✎ بزن و یک چت جدید بساز</div>`;
+    list.innerHTML = savedRow + `<div class="empty-state"><div class="mark">💬</div>هنوز گفتگویی نداری<br>روی ✎ بزن و یک چت جدید بساز</div>`;
     return;
   }
-  list.innerHTML = chats.map(c => {
+
+  list.innerHTML = savedRow + chats.map(c => {
     const name = `${c.other.first_name || ""} ${c.other.last_name || ""}`.trim() || c.other.username;
     const preview = c.lastMsg
       ? (c.lastMsg.message_type === "text" ? c.lastMsg.content : `📎 ${c.lastMsg.message_type}`)
@@ -819,18 +873,200 @@ function renderChatList(chats) {
     const time = c.lastMsg ? formatTime(c.lastMsg.created_at) : "";
     const avatarStyle = c.other.avatar_url ? `style="background-image:url(${c.other.avatar_url})"` : "";
     return `
-      <div class="chat-item" onclick="openChat('${c.chatId}')">
-        <div class="avatar ${c.other.is_online ? "online" : ""}" ${avatarStyle}>${c.other.avatar_url ? "" : initials(name)}</div>
-        <div class="chat-item-body">
-          <div class="chat-item-top">
-            <span class="chat-item-name">${escapeHtml(name)}</span>
-            <span class="chat-item-time">${time}</span>
+      <div class="chat-row-wrap" data-chatid="${c.chatId}">
+        <div class="chat-row-actions">
+          <button class="mute-btn" onclick="event.stopPropagation(); muteChat('${c.chatId}', ${!!c.is_muted})">${c.is_muted ? "🔔" : "🔕"}</button>
+          <button class="delete-btn" onclick="event.stopPropagation(); deleteChat('${c.chatId}')">🗑️</button>
+        </div>
+        <div class="chat-item" onclick="handleChatItemClick(event, '${c.chatId}', this)">
+          <div class="avatar ${c.other.is_online ? "online" : ""}" ${avatarStyle}>${c.other.avatar_url ? "" : initials(name)}</div>
+          <div class="chat-item-body">
+            <div class="chat-item-top">
+              <span class="chat-item-name">${escapeHtml(name)} ${c.is_muted ? "🔕" : ""}</span>
+              <span class="chat-item-time">${time}</span>
+            </div>
+            <div class="chat-item-preview">${escapeHtml(preview || "")}</div>
           </div>
-          <div class="chat-item-preview">${escapeHtml(preview || "")}</div>
         </div>
       </div>`;
   }).join("");
+
+  attachChatListSwipe(list);
 }
+
+function handleChatItemClick(event, chatId, itemEl) {
+  const wrap = itemEl.closest(".chat-row-wrap");
+  if (wrap.classList.contains("swiped")) {
+    itemEl.style.transform = "translateX(0)";
+    wrap.classList.remove("swiped");
+    return;
+  }
+  openChat(chatId);
+}
+
+function attachChatListSwipe(container) {
+  let startX = 0, activeItem = null, activeWrap = null, swiping = false;
+
+  container.addEventListener("touchstart", (e) => {
+    const wrap = e.target.closest(".chat-row-wrap");
+    if (!wrap || !wrap.dataset.chatid) return;
+    activeWrap = wrap;
+    activeItem = wrap.querySelector(".chat-item");
+    startX = e.touches[0].clientX;
+    swiping = true;
+  }, { passive: true });
+
+  container.addEventListener("touchmove", (e) => {
+    if (!swiping || !activeItem) return;
+    const dx = e.touches[0].clientX - startX;
+    const base = activeWrap.classList.contains("swiped") ? -140 : 0;
+    const val = Math.min(0, Math.max(-140, base + dx));
+    activeItem.style.transform = `translateX(${val}px)`;
+  }, { passive: true });
+
+  container.addEventListener("touchend", (e) => {
+    if (!swiping || !activeItem) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    const base = activeWrap.classList.contains("swiped") ? -140 : 0;
+    const finalVal = base + dx;
+    if (finalVal < -70) {
+      activeItem.style.transform = "translateX(-140px)";
+      activeWrap.classList.add("swiped");
+    } else {
+      activeItem.style.transform = "translateX(0)";
+      activeWrap.classList.remove("swiped");
+    }
+    swiping = false; activeItem = null; activeWrap = null;
+  });
+}
+
+async function muteChat(chatId, currentlyMuted) {
+  await window.supabaseClient.from("chat_members")
+    .update({ is_muted: !currentlyMuted }).eq("chat_id", chatId).eq("user_id", me.id);
+  await loadChatList();
+}
+
+async function deleteChat(chatId) {
+  if (!confirm("این گفتگو از لیست شما حذف بشه؟ (طرف مقابل همچنان می‌بینتش)")) return;
+  await window.supabaseClient.from("chat_members")
+    .delete().eq("chat_id", chatId).eq("user_id", me.id);
+  await loadChatList();
+}
+
+async function openSavedMessages() {
+  const { data: chatId, error } = await window.supabaseClient.rpc("get_or_create_saved_messages");
+  if (error) { alert("خطا: " + error.message); return; }
+  openChat(chatId, { name: "پیام‌های ذخیره‌شده", icon: "🔖", noHeaderLink: true });
+}
+
+// ---------- Stories ----------
+async function loadStoriesBar() {
+  const bar = document.getElementById("storiesBar");
+
+  const { data, error } = await window.supabaseClient
+    .from("stories")
+    .select("id, user_id, media_path, created_at, profiles:user_id(username, first_name, last_name, avatar_url)")
+    .order("created_at", { ascending: true });
+
+  const myOwn = (data || []).filter(s => s.user_id === me.id);
+  const others = (data || []).filter(s => s.user_id !== me.id);
+
+  // group others by user
+  const byUser = {};
+  others.forEach(s => {
+    if (!byUser[s.user_id]) byUser[s.user_id] = { profile: s.profiles, stories: [] };
+    byUser[s.user_id].stories.push(s);
+  });
+
+  let html = `
+    <div class="story-avatar-wrap" onclick="${myOwn.length ? `viewStories('${me.id}')` : "document.getElementById('storyFileInput').click()"}">
+      <div class="story-ring ${myOwn.length ? "" : ""}">
+        <div class="avatar story-add-badge" style="width:100%; height:100%; font-size:18px; ${me.avatar_url ? `background-image:url(${me.avatar_url})` : ""}">${me.avatar_url ? "" : initials(me.first_name || me.username || "?")}</div>
+      </div>
+      <div class="story-label">استوری شما</div>
+    </div>`;
+
+  html += Object.entries(byUser).map(([uid, group]) => {
+    const p = group.profile;
+    const name = `${p.first_name || ""} ${p.last_name || ""}`.trim() || p.username;
+    return `
+      <div class="story-avatar-wrap" onclick="viewStories('${uid}')">
+        <div class="story-ring">
+          <div class="avatar" style="width:100%; height:100%; font-size:18px; ${p.avatar_url ? `background-image:url(${p.avatar_url})` : ""}">${p.avatar_url ? "" : initials(name)}</div>
+        </div>
+        <div class="story-label">${escapeHtml(name)}</div>
+      </div>`;
+  }).join("");
+
+  bar.innerHTML = html;
+  window._storiesByUser = byUser;
+  window._myStories = myOwn;
+}
+
+async function handleStoryUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 20 * 1024 * 1024) { alert("حجم عکس نباید بیشتر از ۲۰ مگابایت باشد"); return; }
+
+  const ext = file.name.split(".").pop();
+  const path = `${me.id}/${crypto.randomUUID()}.${ext}`;
+
+  const { error: upErr } = await window.supabaseClient.storage.from("stories").upload(path, file);
+  if (upErr) { alert("خطا در آپلود: " + upErr.message); return; }
+
+  const { error: dbErr } = await window.supabaseClient.from("stories").insert({
+    user_id: me.id, media_path: path, media_type: "image",
+  });
+  if (dbErr) { alert("خطا: " + dbErr.message); return; }
+
+  event.target.value = "";
+  await loadStoriesBar();
+  alert("استوری منتشر شد ✓ (تا ۲۴ ساعت روی پروفایلت می‌مونه)");
+}
+
+async function viewStories(userId) {
+  const stories = userId === me.id ? window._myStories : window._storiesByUser[userId]?.stories;
+  if (!stories || stories.length === 0) return;
+
+  let index = 0;
+  const viewer = document.createElement("div");
+  viewer.className = "story-viewer";
+  document.body.appendChild(viewer);
+
+  function render() {
+    const s = stories[index];
+    const url = window.supabaseClient.storage.from("stories").getPublicUrl(s.media_path).data.publicUrl;
+    viewer.innerHTML = `
+      <div class="story-progress"><div class="story-progress-fill" id="storyProgressFill"></div></div>
+      <button class="story-close" onclick="this.closest('.story-viewer').remove()">✕</button>
+      <img src="${url}">
+    `;
+    window.supabaseClient.from("story_views").upsert(
+      { story_id: s.id, viewer_id: me.id }, { onConflict: "story_id,viewer_id" }
+    );
+
+    const fill = document.getElementById("storyProgressFill");
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += 2;
+      if (fill) fill.style.width = progress + "%";
+      if (progress >= 100) {
+        clearInterval(interval);
+        if (index < stories.length - 1) { index++; render(); }
+        else viewer.remove();
+      }
+    }, 100);
+
+    viewer.onclick = (e) => {
+      if (e.target.classList.contains("story-close")) return;
+      clearInterval(interval);
+      if (index < stories.length - 1) { index++; render(); }
+      else viewer.remove();
+    };
+  }
+  render();
+}
+
 
 function filterChatList(query) {
   if (!query) return renderChatList(chatCache);
@@ -913,25 +1149,26 @@ async function startChatFromSearch(targetId) {
 let messageCache = {}; // id -> message, for showing reply previews
 let replyingTo = null;
 
-async function openChat(chatId) {
+async function openChat(chatId, override) {
   activeChatId = chatId;
   replyingTo = null;
   openChatMobile();
 
   const chatInfo = chatCache.find(c => c.chatId === chatId);
   const other = chatInfo?.other;
-  const name = other ? (`${other.first_name || ""} ${other.last_name || ""}`.trim() || other.username) : "چت";
+  const name = override?.name || (other ? (`${other.first_name || ""} ${other.last_name || ""}`.trim() || other.username) : "چت");
   const headerAvatarStyle = other?.avatar_url ? `style="background-image:url(${other.avatar_url})"` : "";
+  const headerClickAttr = override?.noHeaderLink ? "" : `onclick="window.location.href='user.html?id=${other?.id || ''}'"`;
 
   const main = document.getElementById("chatMain");
   main.innerHTML = `
     <div class="chat-header">
       <button class="icon-btn" onclick="closeChatMobile()">→</button>
-      <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1;" onclick="window.location.href='user.html?id=${other?.id || ''}'">
-        <div class="avatar ${other?.is_online ? "online" : ""}" ${headerAvatarStyle}>${other?.avatar_url ? "" : initials(name)}</div>
+      <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1;" ${headerClickAttr}>
+        <div class="avatar ${other?.is_online ? "online" : ""}" ${headerAvatarStyle}>${override?.icon || (other?.avatar_url ? "" : initials(name))}</div>
         <div class="chat-header-info">
           <h3>${escapeHtml(name)}</h3>
-          <span>${other?.is_online ? "آنلاین" : "آخرین بازدید " + (other ? formatTime(other.last_seen) : "")}</span>
+          <span>${override ? "" : (other?.is_online ? "آنلاین" : "آخرین بازدید " + (other ? formatTime(other.last_seen) : ""))}</span>
         </div>
       </div>
     </div>
