@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تنظیمات — Cyber Chat</title>
+<title>کانال — Cyber Chat</title>
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
@@ -129,7 +129,7 @@ input, textarea, select { font-family: inherit; }
 }
 .btn:hover { border-color: var(--cyan); }
 .btn-primary {
-  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  background: linear-gradient(135deg, var(--cyan), #00b8d4);
   color: #ffffff;
   border: none;
 }
@@ -452,92 +452,47 @@ input, textarea, select { font-family: inherit; }
 }
 
 
-.settings-page { max-width: 480px; margin: 0 auto; }
-.settings-top {
-  display: flex; align-items: center; gap: 14px; padding: 16px 20px;
-  border-bottom: 1px solid var(--border-soft);
-}
-.settings-profile-card {
-  display: flex; align-items: center; gap: 14px;
-  padding: 16px 20px; cursor: pointer;
-  border-bottom: 8px solid var(--bg-deep);
-}
-.settings-profile-card:hover { background: var(--bg-elevated); }
-.settings-profile-card .avatar { width: 58px; height: 58px; font-size: 20px; }
-.settings-profile-card .name { font-size: 17px; font-weight: 700; }
-.settings-profile-card .sub { font-size: 13px; color: var(--text-dim); }
-.settings-group { border-bottom: 8px solid var(--bg-deep); }
-.settings-row {
-  display: flex; align-items: center; gap: 14px;
-  padding: 13px 20px; border-bottom: 1px solid var(--border-soft);
-  cursor: pointer;
-}
-.settings-row:last-child { border-bottom: none; }
-.settings-row:hover { background: var(--bg-elevated); }
-.settings-row .icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
-.settings-row .label { flex: 1; font-size: 15px; }
-.settings-row .chevron { color: var(--text-faint); }
-.settings-row.danger .label { color: var(--danger); }
+.channel-page { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+.channel-header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border-soft); background: var(--bg-panel); }
+.channel-header-info h3 { margin: 0; font-size: 15px; }
+.channel-header-info span { font-size: 12px; color: var(--text-dim); }
+.channel-feed { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.post-card { background: var(--bg-panel); border-radius: 14px; padding: 14px; max-width: 90%; }
+.post-meta { font-size: 11px; color: var(--text-faint); margin-top: 8px; text-align: left; }
+.channel-composer { display: flex; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--border-soft); background: var(--bg-panel); }
+.join-bar { padding: 14px 16px; border-top: 1px solid var(--border-soft); background: var(--bg-panel); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-<div class="settings-page">
-  <div class="settings-top">
-    <button class="icon-btn" onclick="window.location.href='app.html'">→</button>
-    <h2 style="margin:0; font-size:18px;">تنظیمات</h2>
+<div class="channel-page">
+  <div class="channel-header">
+    <button class="icon-btn" onclick="history.back()">→</button>
+    <div class="avatar" id="chAvatar">📢</div>
+    <div class="channel-header-info" style="flex:1;">
+      <h3 id="chName">...</h3>
+      <span id="chSub"></span>
+    </div>
+    <button class="icon-btn" id="chSettingsBtn" style="display:none;" onclick="toggleChannelSettings()">⚙️</button>
   </div>
 
-  <div class="settings-profile-card" onclick="window.location.href='profile.html'">
-    <div id="avatarBig" class="avatar">?</div>
-    <div>
-      <div class="name" id="sName">...</div>
-      <div class="sub" id="sUsername"></div>
-    </div>
+  <div id="chSettingsPanel" style="display:none; padding:16px; border-bottom:1px solid var(--border-soft); background:var(--bg-elevated);">
+    <div class="field"><label>نام کانال</label><input type="text" id="editChName"></div>
+    <div class="field"><label>توضیحات</label><input type="text" id="editChDesc"></div>
+    <button class="btn btn-primary btn-block" onclick="saveChannelEdits()">ذخیره</button>
+    <div id="chEditMsg" class="auth-msg"></div>
   </div>
 
-  <div class="settings-group">
-    <div class="settings-row" onclick="window.location.href='premium.html'">
-      <div class="icon" style="background:rgba(255,193,7,.15); color:#ffc107;">⭐</div>
-      <div class="label">Cyber Chat Premium</div>
-      <div class="chevron">‹</div>
-    </div>
+  <div class="channel-feed" id="channelFeed"></div>
+
+  <div id="composerBox" style="display:none;" class="channel-composer">
+    <input type="text" id="postInput" placeholder="پست جدید بنویس..." onkeydown="if(event.key==='Enter') sendPost()" style="flex:1; padding:12px 16px; border-radius:999px; border:1px solid var(--border-soft); background:var(--bg-deep); color:var(--text-primary); font-size:16px; outline:none;">
+    <button class="send-btn" onclick="sendPost()">➤</button>
   </div>
 
-  <div class="settings-group">
-    <div class="settings-row" onclick="window.location.href='profile.html'">
-      <div class="icon" style="background:rgba(42,171,238,.15); color:var(--cyan);">👤</div>
-      <div class="label">ویرایش پروفایل</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="toggleTheme()">
-      <div class="icon" style="background:rgba(77,205,94,.15); color:var(--success);">🌓</div>
-      <div class="label">تم تیره / روشن</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='notifications.html'">
-      <div class="icon" style="background:rgba(235,85,69,.15); color:var(--danger);">🔔</div>
-      <div class="label">اعلان‌ها</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='privacy.html'">
-      <div class="icon" style="background:rgba(140,140,140,.15); color:var(--text-dim);">🔒</div>
-      <div class="label">حریم خصوصی و امنیت</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='data-storage.html'">
-      <div class="icon" style="background:rgba(34,158,217,.15); color:var(--magenta);">💾</div>
-      <div class="label">داده‌ها و حافظه</div>
-      <div class="chevron">‹</div>
-    </div>
-  </div>
-
-  <div class="settings-group">
-    <div class="settings-row danger" onclick="signOutCyberChat()">
-      <div class="icon" style="background:rgba(235,85,69,.15);">🚪</div>
-      <div class="label">خروج از حساب</div>
-    </div>
+  <div id="joinBox" style="display:none;" class="join-bar">
+    <button class="btn btn-primary btn-block" onclick="joinThisChannel()">جوین شدن به کانال</button>
   </div>
 </div>
 
@@ -638,33 +593,135 @@ async function setPresence(isOnline) {
 
 </script>
 <script>
-(async function initSettings() {
+let channelId = null;
+let meId = null;
+let myRole = null;
+let postsSub = null;
+
+(async function initChannel() {
   const session = await requireAuth();
   if (!session) return;
-  const profile = await getCurrentProfile();
-  if (!profile) return;
+  meId = session.user.id;
 
-  const name = `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || profile.username;
-  document.getElementById("sName").textContent = name;
-  document.getElementById("sUsername").textContent = "@" + (profile.username || "");
+  const params = new URLSearchParams(window.location.search);
+  channelId = params.get("id");
+  if (!channelId) { document.getElementById("chName").textContent = "کانال پیدا نشد"; return; }
 
-  const box = document.getElementById("avatarBig");
-  if (profile.avatar_url) {
-    box.style.backgroundImage = `url(${profile.avatar_url})`;
-  } else {
-    box.textContent = name.charAt(0).toUpperCase();
+  await loadChannel();
+  subscribeToPosts();
+})();
+
+async function loadChannel() {
+  const { data: channel, error } = await window.supabaseClient
+    .from("channels").select("*").eq("id", channelId).single();
+  if (error || !channel) { document.getElementById("chName").textContent = "کانال پیدا نشد"; return; }
+
+  document.getElementById("chName").textContent = channel.name;
+  if (channel.avatar_url) {
+    const box = document.getElementById("chAvatar");
+    box.textContent = "";
+    box.style.backgroundImage = `url(${channel.avatar_url})`;
   }
-})();
 
-function toggleTheme() {
-  const html = document.documentElement;
-  const next = html.getAttribute("data-theme") === "light" ? "dark" : "light";
-  html.setAttribute("data-theme", next);
-  localStorage.setItem("cyberchat_theme", next);
+  const { count } = await window.supabaseClient
+    .from("channel_members").select("user_id", { count: "exact", head: true }).eq("channel_id", channelId);
+  document.getElementById("chSub").textContent = `@${channel.username} · ${count || 0} مشترک`;
+
+  const { data: membership } = await window.supabaseClient
+    .from("channel_members").select("role").eq("channel_id", channelId).eq("user_id", meId).maybeSingle();
+
+  myRole = membership?.role || null;
+  const isAdmin = myRole === "owner" || myRole === "admin";
+
+  document.getElementById("composerBox").style.display = isAdmin ? "flex" : "none";
+  document.getElementById("chSettingsBtn").style.display = isAdmin ? "flex" : "none";
+  document.getElementById("joinBox").style.display = myRole ? "none" : "block";
+
+  if (isAdmin) {
+    document.getElementById("editChName").value = channel.name;
+    document.getElementById("editChDesc").value = channel.description || "";
+  }
+
+  await loadPosts();
 }
-(function applyStoredThemeOnLoad() {
-  document.documentElement.setAttribute("data-theme", localStorage.getItem("cyberchat_theme") || "dark");
-})();
+
+async function loadPosts() {
+  const { data, error } = await window.supabaseClient
+    .from("channel_posts").select("*").eq("channel_id", channelId)
+    .order("created_at", { ascending: true }).limit(100);
+
+  const feed = document.getElementById("channelFeed");
+  if (error || !data || data.length === 0) {
+    feed.innerHTML = `<div class="empty-state" style="height:auto; padding-top:60px;"><div class="mark">📢</div>هنوز پستی منتشر نشده</div>`;
+    return;
+  }
+  feed.innerHTML = data.map(renderPost).join("");
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function renderPost(p) {
+  return `
+    <div class="post-card" data-id="${p.id}">
+      ${escapeHtml(p.content || "")}
+      <div class="post-meta">${new Date(p.created_at).toLocaleString("fa-IR")}</div>
+    </div>`;
+}
+
+function subscribeToPosts() {
+  postsSub = window.supabaseClient
+    .channel(`channel_posts:${channelId}`)
+    .on("postgres_changes",
+      { event: "INSERT", schema: "public", table: "channel_posts", filter: `channel_id=eq.${channelId}` },
+      (payload) => {
+        if (document.querySelector(`[data-id="${payload.new.id}"]`)) return;
+        const feed = document.getElementById("channelFeed");
+        feed.insertAdjacentHTML("beforeend", renderPost(payload.new));
+        feed.scrollTop = feed.scrollHeight;
+      }
+    )
+    .subscribe();
+}
+
+async function sendPost() {
+  const input = document.getElementById("postInput");
+  const content = input.value.trim();
+  if (!content) return;
+  input.value = "";
+
+  const { error } = await window.supabaseClient
+    .from("channel_posts").insert({ channel_id: channelId, author_id: meId, content });
+  if (error) alert("خطا در ارسال پست: " + error.message);
+}
+
+async function joinThisChannel() {
+  const { error } = await window.supabaseClient.rpc("join_channel", { _channel_id: channelId });
+  if (error) { alert("خطا: " + error.message); return; }
+  loadChannel();
+}
+
+function toggleChannelSettings() {
+  const panel = document.getElementById("chSettingsPanel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
+
+async function saveChannelEdits() {
+  const name = document.getElementById("editChName").value.trim();
+  const desc = document.getElementById("editChDesc").value.trim();
+  const msgEl = document.getElementById("chEditMsg");
+  if (!name) { msgEl.textContent = "نام لازمه"; msgEl.className = "auth-msg error"; return; }
+
+  const { error } = await window.supabaseClient
+    .from("channels").update({ name, description: desc }).eq("id", channelId);
+  if (error) { msgEl.textContent = "خطا: " + error.message; msgEl.className = "auth-msg error"; return; }
+  msgEl.textContent = "ذخیره شد ✓"; msgEl.className = "auth-msg success";
+  loadChannel();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
 </script>
 </body>
 </html>

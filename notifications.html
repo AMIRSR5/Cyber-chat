@@ -619,6 +619,13 @@ async function saveNotifPref() {
 
   localStorage.setItem("cyberchat_sound", soundOn ? "on" : "off");
 
+  if (messagesOn && "Notification" in window && Notification.permission === "default") {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") {
+      alert("بدون اجازه‌ی مرورگر، اعلان‌ها نمایش داده نمی‌شن. از تنظیمات مرورگر می‌تونی بعداً فعالش کنی.");
+    }
+  }
+
   await window.supabaseClient
     .from("user_settings")
     .update({ notifications_enabled: messagesOn })

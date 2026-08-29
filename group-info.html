@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تنظیمات — Cyber Chat</title>
+<title>اطلاعات گروه — Cyber Chat</title>
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
@@ -129,7 +129,7 @@ input, textarea, select { font-family: inherit; }
 }
 .btn:hover { border-color: var(--cyan); }
 .btn-primary {
-  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  background: linear-gradient(135deg, var(--cyan), #00b8d4);
   color: #ffffff;
   border: none;
 }
@@ -452,93 +452,54 @@ input, textarea, select { font-family: inherit; }
 }
 
 
-.settings-page { max-width: 480px; margin: 0 auto; }
-.settings-top {
-  display: flex; align-items: center; gap: 14px; padding: 16px 20px;
-  border-bottom: 1px solid var(--border-soft);
+.profile-page { max-width: 480px; margin: 0 auto; padding: 20px; }
+.profile-topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.profile-avatar-big {
+  width: 88px; height: 88px; border-radius: 50%; margin: 0 auto 12px;
+  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  background-size: cover; background-position: center;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: 800; color: #fff;
 }
-.settings-profile-card {
-  display: flex; align-items: center; gap: 14px;
-  padding: 16px 20px; cursor: pointer;
-  border-bottom: 8px solid var(--bg-deep);
-}
-.settings-profile-card:hover { background: var(--bg-elevated); }
-.settings-profile-card .avatar { width: 58px; height: 58px; font-size: 20px; }
-.settings-profile-card .name { font-size: 17px; font-weight: 700; }
-.settings-profile-card .sub { font-size: 13px; color: var(--text-dim); }
-.settings-group { border-bottom: 8px solid var(--bg-deep); }
-.settings-row {
-  display: flex; align-items: center; gap: 14px;
-  padding: 13px 20px; border-bottom: 1px solid var(--border-soft);
-  cursor: pointer;
-}
-.settings-row:last-child { border-bottom: none; }
-.settings-row:hover { background: var(--bg-elevated); }
-.settings-row .icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
-.settings-row .label { flex: 1; font-size: 15px; }
-.settings-row .chevron { color: var(--text-faint); }
-.settings-row.danger .label { color: var(--danger); }
+.group-name-center { text-align: center; font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+.group-sub-center { text-align: center; color: var(--text-dim); font-size: 13px; margin-bottom: 20px; }
+.section-label { font-size: 12.5px; color: var(--text-dim); margin: 20px 0 8px; }
+.member-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border-soft); }
+.member-row .name { font-size: 14px; font-weight: 600; }
+.member-row .role { font-size: 11px; color: var(--cyan); }
+.member-row .kick-btn { margin-inline-start: auto; font-size: 12px; color: var(--danger); background: none; border: none; }
+.danger-btn { border-color: var(--danger); color: var(--danger); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-<div class="settings-page">
-  <div class="settings-top">
-    <button class="icon-btn" onclick="window.location.href='app.html'">→</button>
-    <h2 style="margin:0; font-size:18px;">تنظیمات</h2>
+<div class="profile-page">
+  <div class="profile-topbar">
+    <button class="icon-btn" onclick="history.back()">→</button>
+    <h2 style="margin:0; font-size:18px;">اطلاعات گروه</h2>
   </div>
 
-  <div class="settings-profile-card" onclick="window.location.href='profile.html'">
-    <div id="avatarBig" class="avatar">?</div>
-    <div>
-      <div class="name" id="sName">...</div>
-      <div class="sub" id="sUsername"></div>
-    </div>
+  <div id="avatarBig" class="profile-avatar-big">👥</div>
+  <div id="groupNameDisplay" class="group-name-center">...</div>
+  <div id="groupSubDisplay" class="group-sub-center"></div>
+
+  <div id="editSection" style="display:none;">
+    <div class="field"><label>نام گروه</label><input type="text" id="editGroupName"></div>
+    <div class="field"><label>توضیحات</label><input type="text" id="editGroupDesc"></div>
+    <button class="btn btn-primary btn-block" onclick="saveGroupEdits()">ذخیره تغییرات</button>
+    <div id="editMsg" class="auth-msg"></div>
   </div>
 
-  <div class="settings-group">
-    <div class="settings-row" onclick="window.location.href='premium.html'">
-      <div class="icon" style="background:rgba(255,193,7,.15); color:#ffc107;">⭐</div>
-      <div class="label">Cyber Chat Premium</div>
-      <div class="chevron">‹</div>
-    </div>
+  <div class="section-label">اعضا (<span id="memberCount">0</span>)</div>
+  <div id="addMemberBox" style="display:none; margin-bottom:10px;">
+    <input type="text" class="admin-search" id="addMemberQuery" placeholder="جستجوی یوزرنیم برای افزودن..." oninput="debounceAddMemberSearch()" style="width:100%; padding:10px 14px; border-radius:999px; border:1px solid var(--border-soft); background:var(--bg-deep); color:var(--text-primary); font-size:15px;">
+    <div id="addMemberResults"></div>
   </div>
+  <div id="memberList"></div>
 
-  <div class="settings-group">
-    <div class="settings-row" onclick="window.location.href='profile.html'">
-      <div class="icon" style="background:rgba(42,171,238,.15); color:var(--cyan);">👤</div>
-      <div class="label">ویرایش پروفایل</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="toggleTheme()">
-      <div class="icon" style="background:rgba(77,205,94,.15); color:var(--success);">🌓</div>
-      <div class="label">تم تیره / روشن</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='notifications.html'">
-      <div class="icon" style="background:rgba(235,85,69,.15); color:var(--danger);">🔔</div>
-      <div class="label">اعلان‌ها</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='privacy.html'">
-      <div class="icon" style="background:rgba(140,140,140,.15); color:var(--text-dim);">🔒</div>
-      <div class="label">حریم خصوصی و امنیت</div>
-      <div class="chevron">‹</div>
-    </div>
-    <div class="settings-row" onclick="window.location.href='data-storage.html'">
-      <div class="icon" style="background:rgba(34,158,217,.15); color:var(--magenta);">💾</div>
-      <div class="label">داده‌ها و حافظه</div>
-      <div class="chevron">‹</div>
-    </div>
-  </div>
-
-  <div class="settings-group">
-    <div class="settings-row danger" onclick="signOutCyberChat()">
-      <div class="icon" style="background:rgba(235,85,69,.15);">🚪</div>
-      <div class="label">خروج از حساب</div>
-    </div>
-  </div>
+  <div class="section-label">عملیات</div>
+  <button class="btn btn-block danger-btn" onclick="leaveGroup()">خروج از گروه</button>
 </div>
 
 <script>
@@ -638,33 +599,137 @@ async function setPresence(isOnline) {
 
 </script>
 <script>
-(async function initSettings() {
+let groupId = null;
+let myRole = null;
+let meId = null;
+
+(async function initGroupInfo() {
   const session = await requireAuth();
   if (!session) return;
-  const profile = await getCurrentProfile();
-  if (!profile) return;
+  meId = session.user.id;
 
-  const name = `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || profile.username;
-  document.getElementById("sName").textContent = name;
-  document.getElementById("sUsername").textContent = "@" + (profile.username || "");
+  const params = new URLSearchParams(window.location.search);
+  groupId = params.get("id");
+  if (!groupId) { document.getElementById("groupNameDisplay").textContent = "گروه پیدا نشد"; return; }
 
-  const box = document.getElementById("avatarBig");
-  if (profile.avatar_url) {
-    box.style.backgroundImage = `url(${profile.avatar_url})`;
-  } else {
-    box.textContent = name.charAt(0).toUpperCase();
+  await loadGroupInfo();
+})();
+
+async function loadGroupInfo() {
+  const { data: group, error } = await window.supabaseClient
+    .from("groups").select("*").eq("id", groupId).single();
+  if (error || !group) { document.getElementById("groupNameDisplay").textContent = "گروه پیدا نشد"; return; }
+
+  document.getElementById("groupNameDisplay").textContent = group.name;
+  document.getElementById("groupSubDisplay").textContent = group.description || "";
+  if (group.avatar_url) {
+    const box = document.getElementById("avatarBig");
+    box.textContent = "";
+    box.style.backgroundImage = `url(${group.avatar_url})`;
   }
-})();
 
-function toggleTheme() {
-  const html = document.documentElement;
-  const next = html.getAttribute("data-theme") === "light" ? "dark" : "light";
-  html.setAttribute("data-theme", next);
-  localStorage.setItem("cyberchat_theme", next);
+  const { data: members } = await window.supabaseClient
+    .from("group_members")
+    .select("user_id, role, profiles:user_id(username, first_name, last_name, avatar_url)")
+    .eq("group_id", groupId);
+
+  const mine = members?.find(m => m.user_id === meId);
+  myRole = mine?.role || "member";
+  const isAdmin = myRole === "owner" || myRole === "admin";
+
+  document.getElementById("memberCount").textContent = members?.length || 0;
+  document.getElementById("addMemberBox").style.display = isAdmin ? "block" : "none";
+  document.getElementById("editSection").style.display = isAdmin ? "block" : "none";
+  if (isAdmin) {
+    document.getElementById("editGroupName").value = group.name;
+    document.getElementById("editGroupDesc").value = group.description || "";
+  }
+
+  const roleLabel = { owner: "مالک", admin: "ادمین", member: "" };
+  document.getElementById("memberList").innerHTML = (members || []).map(m => {
+    const p = m.profiles;
+    const name = `${p.first_name || ""} ${p.last_name || ""}`.trim() || p.username;
+    const canKick = isAdmin && m.user_id !== meId && m.role !== "owner";
+    return `
+      <div class="member-row">
+        <div class="avatar" style="width:38px;height:38px;font-size:14px; ${p.avatar_url ? `background-image:url(${p.avatar_url})` : ""}">${p.avatar_url ? "" : name.charAt(0).toUpperCase()}</div>
+        <div>
+          <div class="name">${escapeHtml(name)}</div>
+          ${roleLabel[m.role] ? `<div class="role">${roleLabel[m.role]}</div>` : ""}
+        </div>
+        ${canKick ? `<button class="kick-btn" onclick="kickMember('${m.user_id}')">حذف</button>` : ""}
+      </div>`;
+  }).join("");
 }
-(function applyStoredThemeOnLoad() {
-  document.documentElement.setAttribute("data-theme", localStorage.getItem("cyberchat_theme") || "dark");
-})();
+
+async function saveGroupEdits() {
+  const name = document.getElementById("editGroupName").value.trim();
+  const desc = document.getElementById("editGroupDesc").value.trim();
+  const msgEl = document.getElementById("editMsg");
+  if (!name) { msgEl.textContent = "نام نمی‌تونه خالی باشه"; msgEl.className = "auth-msg error"; return; }
+
+  const { error } = await window.supabaseClient
+    .from("groups").update({ name, description: desc }).eq("id", groupId);
+  if (error) { msgEl.textContent = "خطا: " + error.message; msgEl.className = "auth-msg error"; return; }
+  msgEl.textContent = "ذخیره شد ✓"; msgEl.className = "auth-msg success";
+  loadGroupInfo();
+}
+
+let addMemberTimer = null;
+function debounceAddMemberSearch() {
+  clearTimeout(addMemberTimer);
+  addMemberTimer = setTimeout(runAddMemberSearch, 300);
+}
+
+async function runAddMemberSearch() {
+  const q = document.getElementById("addMemberQuery").value.trim();
+  const results = document.getElementById("addMemberResults");
+  if (!q) { results.innerHTML = ""; return; }
+
+  const { data } = await window.supabaseClient
+    .from("profiles").select("id, username, first_name, last_name, avatar_url")
+    .neq("id", meId).ilike("username", `%${q}%`).limit(10);
+
+  results.innerHTML = (data || []).map(u => {
+    const name = `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username;
+    return `
+      <div class="member-row" style="cursor:pointer;" onclick="addMember('${u.id}')">
+        <div class="avatar" style="width:34px;height:34px;font-size:13px; ${u.avatar_url ? `background-image:url(${u.avatar_url})` : ""}">${u.avatar_url ? "" : name.charAt(0).toUpperCase()}</div>
+        <div class="name">${escapeHtml(name)}</div>
+        <span style="margin-inline-start:auto; color:var(--cyan);">+ افزودن</span>
+      </div>`;
+  }).join("");
+}
+
+async function addMember(userId) {
+  const { error } = await window.supabaseClient.rpc("add_group_member", { _group_id: groupId, _user_id: userId });
+  if (error) { alert("خطا: " + error.message); return; }
+  document.getElementById("addMemberQuery").value = "";
+  document.getElementById("addMemberResults").innerHTML = "";
+  loadGroupInfo();
+}
+
+async function kickMember(userId) {
+  if (!confirm("این عضو از گروه حذف بشه؟")) return;
+  const { data: group } = await window.supabaseClient.from("groups").select("chat_id").eq("id", groupId).single();
+  await window.supabaseClient.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId);
+  await window.supabaseClient.from("chat_members").delete().eq("chat_id", group.chat_id).eq("user_id", userId);
+  loadGroupInfo();
+}
+
+async function leaveGroup() {
+  if (!confirm("از این گروه خارج بشی؟")) return;
+  const { data: group } = await window.supabaseClient.from("groups").select("chat_id").eq("id", groupId).single();
+  await window.supabaseClient.from("group_members").delete().eq("group_id", groupId).eq("user_id", meId);
+  await window.supabaseClient.from("chat_members").delete().eq("chat_id", group.chat_id).eq("user_id", meId);
+  window.location.href = "app.html";
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
 </script>
 </body>
 </html>

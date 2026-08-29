@@ -560,6 +560,39 @@ input, textarea, select { font-family: inherit; }
   </div>
 </div>
 
+<div id="newGroupScreen" style="display:none; position:fixed; inset:0; z-index:40; background:var(--bg-panel); flex-direction:column;">
+  <div class="settings-top" style="border-bottom:1px solid var(--border-soft);">
+    <button class="icon-btn" onclick="closeNewGroupFlow()">→</button>
+    <h2 style="margin:0; font-size:16px;">گروه جدید</h2>
+  </div>
+
+  <!-- step 1: pick members -->
+  <div id="groupStepMembers">
+    <div class="sidebar-search">
+      <input type="text" id="groupMemberQuery" placeholder="جستجوی یوزرنیم برای افزودن..." oninput="debounceGroupMemberSearch()">
+    </div>
+    <div id="groupSelectedChips" style="display:flex; gap:6px; flex-wrap:wrap; padding:0 16px 10px;"></div>
+    <div id="groupMemberResults" style="overflow-y:auto; max-height:50vh;"></div>
+    <div style="padding:16px;">
+      <button class="btn btn-primary btn-block" onclick="goToGroupNameStep()">بعدی (<span id="groupMemberCount">0</span> نفر)</button>
+    </div>
+  </div>
+
+  <!-- step 2: name -->
+  <div id="groupStepName" style="display:none; padding:16px;">
+    <div class="field">
+      <label>نام گروه</label>
+      <input type="text" id="groupNameInput" placeholder="مثلاً: دوستان دانشگاه">
+    </div>
+    <div class="field">
+      <label>توضیحات (اختیاری)</label>
+      <input type="text" id="groupDescInput">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="finalizeCreateGroup()">ساخت گروه</button>
+    <div id="groupCreateMsg" class="auth-msg"></div>
+  </div>
+</div>
+
 <div class="app-shell">
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
@@ -571,11 +604,11 @@ input, textarea, select { font-family: inherit; }
     <div class="sidebar-search">
       <input type="text" id="chatSearch" placeholder="جستجو در گفتگوها و کاربران...">
     </div>
-    <button class="fab" onclick="openNewChatSearch()" title="گفتگوی جدید">✎</button>
+    <button class="fab" onclick="handleFabClick()" title="گفتگوی جدید">✎</button>
     <div class="sidebar-tabs">
-      <div class="sidebar-tab active">چت‌ها</div>
-      <div class="sidebar-tab" title="فاز بعدی">گروه‌ها</div>
-      <div class="sidebar-tab" title="فاز بعدی">کانال‌ها</div>
+      <div class="sidebar-tab active" id="tabChats" onclick="switchListTab('chats')">چت‌ها</div>
+      <div class="sidebar-tab" id="tabGroups" onclick="switchListTab('groups')">گروه‌ها</div>
+      <div class="sidebar-tab" id="tabChannels" onclick="switchListTab('channels')">کانال‌ها</div>
     </div>
     <div class="stories-bar" id="storiesBar"></div>
     <input type="file" id="storyFileInput" accept="image/*" style="display:none" onchange="handleStoryUpload(event)">
@@ -732,6 +765,50 @@ function isActuallyOnline(profile) {
   return (Date.now() - new Date(profile.last_seen).getTime()) < 35000;
 }
 
+// ---------- browser notifications for messages in chats you're not currently viewing ----------
+let globalMsgSub = null;
+function subscribeToAllMessagesForNotifications() {
+  if (globalMsgSub) window.supabaseClient.removeChannel(globalMsgSub);
+
+  globalMsgSub = window.supabaseClient
+    .channel("global-message-notify")
+    .on("postgres_changes",
+      { event: "INSERT", schema: "public", table: "messages" },
+      async (payload) => {
+        const msg = payload.new;
+        if (msg.sender_id === me.id) return; // don't notify on your own messages
+
+        // if it's for the chat currently open, just refresh unread state elsewhere (no popup needed)
+        if (msg.chat_id === activeChatId) return;
+
+        // refresh the badge counts in the background
+        if (activeListTab === "groups") loadGroupList(); else loadChatList();
+
+        if (document.hidden && Notification.permission === "granted") {
+          const { data: sender } = await window.supabaseClient
+            .from("profiles").select("first_name, last_name, username").eq("id", msg.sender_id).single();
+          const name = sender ? (`${sender.first_name || ""} ${sender.last_name || ""}`.trim() || sender.username) : "پیام جدید";
+          const body = msg.message_type === "text" ? msg.content : `📎 ${msg.message_type}`;
+          try {
+            if (navigator.serviceWorker?.ready) {
+              const reg = await navigator.serviceWorker.ready;
+              reg.showNotification(name, { body, icon: "icon-192.png" });
+            } else {
+              new Notification(name, { body });
+            }
+          } catch (e) { /* notifications not available — silently skip */ }
+        }
+      }
+    )
+    .subscribe();
+}
+
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) return "unsupported";
+  if (Notification.permission === "granted") return "granted";
+  return await Notification.requestPermission();
+}
+
 let activeChatId = null;
 let messagesSub = null;
 
@@ -756,6 +833,7 @@ if (window.visualViewport) window.visualViewport.addEventListener("resize", setA
 
   await loadChatList();
   await loadStoriesBar();
+  subscribeToAllMessagesForNotifications();
 
   const params = new URLSearchParams(window.location.search);
   const openId = params.get("open");
@@ -788,10 +866,150 @@ async function showBottomTab(tab) {
   document.getElementById("navContacts").classList.toggle("active", tab === "contacts");
 
   if (tab === "chats") {
-    renderChatList(chatCache);
+    if (activeListTab === "groups") await loadGroupList();
+    else if (activeListTab === "channels") await loadChannelList();
+    else renderChatList(chatCache);
   } else {
     await renderContactsList();
   }
+}
+
+let activeListTab = "chats"; // "chats" | "groups" | "channels"
+let groupCache = [];
+let channelCache = [];
+
+function switchListTab(tab) {
+  activeListTab = tab;
+  document.getElementById("tabChats").classList.toggle("active", tab === "chats");
+  document.getElementById("tabGroups").classList.toggle("active", tab === "groups");
+  document.getElementById("tabChannels").classList.toggle("active", tab === "channels");
+  if (tab === "chats") renderChatList(chatCache);
+  else if (tab === "groups") loadGroupList();
+  else loadChannelList();
+}
+
+function handleFabClick() {
+  if (activeListTab === "groups") openNewGroupFlow();
+  else if (activeListTab === "channels") openNewChannelFlow();
+  else openNewChatSearch();
+}
+
+async function loadChannelList() {
+  document.getElementById("chatList").innerHTML =
+    `<div class="empty-state"><div class="mark">📢</div>در حال بارگذاری...</div>`;
+
+  const { data, error } = await window.supabaseClient.rpc("get_my_channels");
+  if (error) { console.error(error); channelCache = []; renderChannelList([]); return; }
+
+  channelCache = (data || []).map(row => ({
+    channelId: row.channel_id,
+    name: row.name,
+    username: row.username,
+    avatarUrl: row.avatar_url,
+    subscriberCount: row.subscriber_count,
+    myRole: row.my_role,
+    lastMsg: row.last_created_at ? { content: row.last_content, created_at: row.last_created_at } : null,
+  }));
+
+  renderChannelList(channelCache);
+}
+
+function renderChannelList(channels) {
+  const list = document.getElementById("chatList");
+  if (channels.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="mark">📢</div>هنوز عضو هیچ کانالی نیستی<br>روی ✎ بزن و یک کانال بساز یا جوین شو</div>`;
+    return;
+  }
+  list.innerHTML = channels.map(ch => {
+    const preview = ch.lastMsg ? ch.lastMsg.content : `${ch.subscriberCount} مشترک`;
+    const time = ch.lastMsg ? formatTime(ch.lastMsg.created_at) : "";
+    const avatarStyle = ch.avatarUrl ? `style="background-image:url(${ch.avatarUrl})"` : "";
+    return `
+      <div class="chat-item" onclick="window.location.href='channel.html?id=${ch.channelId}'">
+        <div class="avatar" ${avatarStyle}>${ch.avatarUrl ? "" : "📢"}</div>
+        <div class="chat-item-body">
+          <div class="chat-item-top">
+            <span class="chat-item-name">${escapeHtml(ch.name)}</span>
+            <span class="chat-item-time">${time}</span>
+          </div>
+          <div class="chat-item-preview">${escapeHtml(preview || "")}</div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function openNewChannelFlow() {
+  const name = prompt("نام کانال:");
+  if (!name) return;
+  const username = prompt("یوزرنیم عمومی کانال (بدون @، انگلیسی):");
+  if (!username) return;
+  const desc = prompt("توضیحات (اختیاری):") || "";
+
+  window.supabaseClient.rpc("create_channel", { _name: name, _username: username, _description: desc })
+    .then(({ data: channelId, error }) => {
+      if (error) { alert("خطا: " + error.message); return; }
+      window.location.href = `channel.html?id=${channelId}`;
+    });
+}
+
+async function loadGroupList() {
+  document.getElementById("chatList").innerHTML =
+    `<div class="empty-state"><div class="mark">👥</div>در حال بارگذاری...</div>`;
+
+  const { data, error } = await window.supabaseClient.rpc("get_my_groups");
+  if (error) { console.error(error); groupCache = []; renderGroupList([]); return; }
+
+  groupCache = (data || []).map(row => ({
+    chatId: row.chat_id,
+    groupId: row.group_id,
+    name: row.name,
+    avatarUrl: row.avatar_url,
+    memberCount: row.member_count,
+    myRole: row.my_role,
+    lastMsg: row.last_created_at ? {
+      content: row.last_content, message_type: row.last_message_type, created_at: row.last_created_at,
+    } : null,
+    unreadCount: row.unread_count || 0,
+  }));
+
+  renderGroupList(groupCache);
+}
+
+function renderGroupList(groups) {
+  const list = document.getElementById("chatList");
+  if (groups.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="mark">👥</div>هنوز عضو هیچ گروهی نیستی<br>روی ✎ بزن و یک گروه بساز</div>`;
+    return;
+  }
+  list.innerHTML = groups.map(g => {
+    const preview = g.lastMsg
+      ? (g.lastMsg.message_type === "text" ? g.lastMsg.content : `📎 ${g.lastMsg.message_type}`)
+      : `${g.memberCount} عضو`;
+    const time = g.lastMsg ? formatTime(g.lastMsg.created_at) : "";
+    const avatarStyle = g.avatarUrl ? `style="background-image:url(${g.avatarUrl})"` : "";
+    return `
+      <div class="chat-item" data-chatid="${g.chatId}" onclick="openGroupChat('${g.chatId}', '${g.groupId}')">
+        <div class="avatar" ${avatarStyle}>${g.avatarUrl ? "" : "👥"}</div>
+        <div class="chat-item-body">
+          <div class="chat-item-top">
+            <span class="chat-item-name">${escapeHtml(g.name)}</span>
+            <span class="chat-item-time">${time}</span>
+          </div>
+          <div class="chat-item-preview">${escapeHtml(preview || "")}</div>
+        </div>
+        ${g.unreadCount > 0 ? `<div class="unread-dot">${g.unreadCount > 99 ? "99+" : g.unreadCount}</div>` : ""}
+      </div>`;
+  }).join("");
+}
+
+function openGroupChat(chatId, groupId) {
+  const g = groupCache.find(x => x.chatId === chatId);
+  openChat(chatId, {
+    name: g?.name || "گروه",
+    icon: g?.avatarUrl ? "" : "👥",
+    avatarUrl: g?.avatarUrl,
+    headerLink: `group-info.html?id=${groupId}`,
+  });
 }
 
 async function renderContactsList() {
@@ -870,12 +1088,14 @@ async function loadChatList() {
       avatar_url: row.other_avatar_url,
       is_online: row.other_is_online,
       last_seen: row.other_last_seen,
+      is_premium: row.other_is_premium,
     },
     lastMsg: row.last_created_at ? {
       content: row.last_content,
       message_type: row.last_message_type,
       created_at: row.last_created_at,
     } : null,
+    unreadCount: row.unread_count || 0,
   }));
 
   chatCache = chats;
@@ -918,11 +1138,12 @@ function renderChatList(chats) {
           <div class="avatar ${isActuallyOnline(c.other) ? "online" : ""}" ${avatarStyle}>${c.other.avatar_url ? "" : initials(name)}</div>
           <div class="chat-item-body">
             <div class="chat-item-top">
-              <span class="chat-item-name">${escapeHtml(name)} ${c.is_muted ? "🔕" : ""}</span>
+              <span class="chat-item-name">${escapeHtml(name)} ${c.other.is_premium ? "⭐" : ""} ${c.is_muted ? "🔕" : ""}</span>
               <span class="chat-item-time">${time}</span>
             </div>
             <div class="chat-item-preview">${escapeHtml(preview || "")}</div>
           </div>
+          ${c.unreadCount > 0 ? `<div class="unread-dot">${c.unreadCount > 99 ? "99+" : c.unreadCount}</div>` : ""}
         </div>
       </div>`;
   }).join("");
@@ -1181,6 +1402,102 @@ async function startChatFromSearch(targetId) {
   openChat(chatId);
 }
 
+// ---------- new group flow ----------
+let selectedGroupMembers = {}; // id -> {id, username, name}
+
+function openNewGroupFlow() {
+  selectedGroupMembers = {};
+  document.getElementById("newGroupScreen").style.display = "flex";
+  document.getElementById("groupStepMembers").style.display = "block";
+  document.getElementById("groupStepName").style.display = "none";
+  document.getElementById("groupMemberQuery").value = "";
+  document.getElementById("groupMemberResults").innerHTML = "";
+  renderGroupChips();
+}
+function closeNewGroupFlow() {
+  document.getElementById("newGroupScreen").style.display = "none";
+}
+
+let groupMemberSearchTimer = null;
+function debounceGroupMemberSearch() {
+  clearTimeout(groupMemberSearchTimer);
+  groupMemberSearchTimer = setTimeout(runGroupMemberSearch, 300);
+}
+
+async function runGroupMemberSearch() {
+  const q = document.getElementById("groupMemberQuery").value.trim();
+  const results = document.getElementById("groupMemberResults");
+  if (!q) { results.innerHTML = ""; return; }
+
+  const { data, error } = await window.supabaseClient
+    .from("profiles").select("id, username, first_name, last_name, avatar_url")
+    .neq("id", me.id).ilike("username", `%${q}%`).limit(20);
+
+  if (error || !data || data.length === 0) {
+    results.innerHTML = `<div style="padding:16px; color:var(--text-dim); text-align:center;">کسی پیدا نشد</div>`;
+    return;
+  }
+
+  results.innerHTML = data.map(u => {
+    const name = `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username;
+    const checked = selectedGroupMembers[u.id] ? "✓" : "+";
+    return `
+      <div class="chat-item" onclick='toggleGroupMember(${JSON.stringify(u.id)}, ${JSON.stringify(name)})'>
+        <div class="avatar" style="${u.avatar_url ? `background-image:url(${u.avatar_url})` : ""}">${u.avatar_url ? "" : initials(name)}</div>
+        <div class="chat-item-body"><div class="chat-item-top"><span class="chat-item-name">${escapeHtml(name)}</span></div></div>
+        <div class="icon-btn" style="border-radius:50%;">${checked}</div>
+      </div>`;
+  }).join("");
+}
+
+function toggleGroupMember(id, name) {
+  if (selectedGroupMembers[id]) delete selectedGroupMembers[id];
+  else selectedGroupMembers[id] = { id, name };
+  renderGroupChips();
+  runGroupMemberSearch();
+}
+
+function renderGroupChips() {
+  const count = Object.keys(selectedGroupMembers).length;
+  document.getElementById("groupMemberCount").textContent = count;
+  document.getElementById("groupSelectedChips").innerHTML = Object.values(selectedGroupMembers).map(m => `
+    <span class="badge-pill" style="background:var(--bg-elevated); color:var(--text-primary); display:inline-flex; align-items:center; gap:6px; padding:5px 10px;">
+      ${escapeHtml(m.name)} <span style="cursor:pointer;" onclick='toggleGroupMember(${JSON.stringify(m.id)}, ${JSON.stringify(m.name)})'>✕</span>
+    </span>`).join("");
+}
+
+function goToGroupNameStep() {
+  if (Object.keys(selectedGroupMembers).length === 0) {
+    if (!confirm("بدون افزودن عضوی ادامه بدیم؟ می‌تونی بعداً اضافه کنی.")) return;
+  }
+  document.getElementById("groupStepMembers").style.display = "none";
+  document.getElementById("groupStepName").style.display = "block";
+  document.getElementById("groupNameInput").focus();
+}
+
+async function finalizeCreateGroup() {
+  const name = document.getElementById("groupNameInput").value.trim();
+  const desc = document.getElementById("groupDescInput").value.trim();
+  const msgEl = document.getElementById("groupCreateMsg");
+
+  if (!name) { msgEl.textContent = "نام گروه لازمه"; msgEl.className = "auth-msg error"; return; }
+  msgEl.textContent = "در حال ساخت...";
+  msgEl.className = "auth-msg";
+
+  const memberIds = Object.keys(selectedGroupMembers);
+  const { data: chatId, error } = await window.supabaseClient
+    .rpc("create_group", { _name: name, _description: desc, _member_ids: memberIds });
+
+  if (error) { msgEl.textContent = "خطا: " + error.message; msgEl.className = "auth-msg error"; return; }
+
+  closeNewGroupFlow();
+  activeListTab = "groups";
+  document.getElementById("tabChats").classList.remove("active");
+  document.getElementById("tabGroups").classList.add("active");
+  await loadGroupList();
+  openGroupChat(chatId, null);
+}
+
 // ---------- opening a chat + realtime ----------
 let messageCache = {}; // id -> message, for showing reply previews
 let replyingTo = null;
@@ -1193,17 +1510,19 @@ async function openChat(chatId, override) {
   const chatInfo = chatCache.find(c => c.chatId === chatId);
   const other = chatInfo?.other;
   const name = override?.name || (other ? (`${other.first_name || ""} ${other.last_name || ""}`.trim() || other.username) : "چت");
-  const headerAvatarStyle = other?.avatar_url ? `style="background-image:url(${other.avatar_url})"` : "";
-  const headerClickAttr = override?.noHeaderLink ? "" : `onclick="window.location.href='user.html?id=${other?.id || ''}'"`;
+  const avatarUrlToUse = override?.avatarUrl || other?.avatar_url;
+  const headerAvatarStyle = avatarUrlToUse ? `style="background-image:url(${avatarUrlToUse})"` : "";
+  const headerClickAttr = override?.noHeaderLink ? "" :
+    `onclick="window.location.href='${override?.headerLink || `user.html?id=${other?.id || ''}`}'"`;
 
   const main = document.getElementById("chatMain");
   main.innerHTML = `
     <div class="chat-header">
       <button class="icon-btn" onclick="closeChatMobile()">→</button>
       <div style="display:flex; align-items:center; gap:12px; cursor:pointer; flex:1;" ${headerClickAttr}>
-        <div class="avatar ${isActuallyOnline(other) ? "online" : ""}" ${headerAvatarStyle}>${override?.icon || (other?.avatar_url ? "" : initials(name))}</div>
+        <div class="avatar ${isActuallyOnline(other) ? "online" : ""}" ${headerAvatarStyle}>${avatarUrlToUse ? "" : (override?.icon || initials(name))}</div>
         <div class="chat-header-info">
-          <h3>${escapeHtml(name)}</h3>
+          <h3>${escapeHtml(name)} ${other?.is_premium ? "⭐" : ""}</h3>
           <span>${override ? "" : (isActuallyOnline(other) ? "آنلاین" : "آخرین بازدید " + (other ? formatTime(other.last_seen) : ""))}</span>
         </div>
       </div>
@@ -1224,6 +1543,16 @@ async function openChat(chatId, override) {
   await loadMessages(chatId);
   subscribeToMessages(chatId);
   attachSwipeHandlers(document.getElementById("messagesArea"));
+
+  window.supabaseClient.rpc("mark_chat_read", { _chat_id: chatId }).then(() => {
+    // clear the badge locally without a full reload
+    const wrap = document.querySelector(`.chat-row-wrap[data-chatid="${chatId}"] .unread-dot, .chat-item[data-chatid="${chatId}"] .unread-dot`);
+    if (wrap) wrap.remove();
+    const chatEntry = chatCache.find(c => c.chatId === chatId);
+    if (chatEntry) chatEntry.unreadCount = 0;
+    const groupEntry = groupCache.find(g => g.chatId === chatId);
+    if (groupEntry) groupEntry.unreadCount = 0;
+  });
 }
 
 async function loadMessages(chatId) {
@@ -1271,6 +1600,7 @@ function renderMessageBubble(msg) {
         <div style="display:flex; gap:6px; justify-content:flex-end; margin-bottom:2px;">
           <span onclick='startReply(${JSON.stringify(msg.id)})' style="cursor:pointer; font-size:11px; color:var(--text-faint);" title="ریپلای">↩</span>
           <span onclick='startForward(${JSON.stringify(msg.id)})' style="cursor:pointer; font-size:11px; color:var(--text-faint);" title="فوروارد">➦</span>
+          ${own ? "" : `<span onclick='reportMessage(${JSON.stringify(msg.id)})' style="cursor:pointer; font-size:11px; color:var(--text-faint);" title="گزارش">🚩</span>`}
         </div>
         ${replySnippet}
         ${mediaHtml}
@@ -1352,6 +1682,16 @@ async function startForward(messageId) {
   });
   if (sendErr) alert("خطا در فوروارد: " + sendErr.message);
   else alert("فوروارد شد ✓");
+}
+
+async function reportMessage(messageId) {
+  const reason = prompt("دلیل گزارش این پیام رو بنویس:");
+  if (!reason) return;
+  const { error } = await window.supabaseClient.from("reports").insert({
+    reporter_id: me.id, target_type: "message", target_id: messageId, reason,
+  });
+  if (error) alert("خطا: " + error.message);
+  else alert("پیام گزارش شد ✓");
 }
 
 function subscribeToMessages(chatId) {

@@ -500,6 +500,8 @@ input, textarea, select { font-family: inherit; }
     </div>
 
     <button class="btn btn-primary btn-block" style="margin-top:20px;" onclick="startChatWithThisUser()">شروع گفتگو</button>
+    <button class="btn btn-block" style="margin-top:10px; border-color:var(--danger); color:var(--danger);" onclick="reportThisUser()">🚩 گزارش این کاربر</button>
+    <button class="btn btn-block" style="margin-top:10px; border-color:var(--danger); color:var(--danger);" onclick="blockThisUser()">مسدود کردن</button>
   </div>
 </div>
 
@@ -612,7 +614,7 @@ let viewedUserId = null;
 
   const { data: profile, error } = await window.supabaseClient
     .from("profiles")
-    .select("id, username, first_name, last_name, bio, phone, avatar_url, is_online, last_seen")
+    .select("id, username, first_name, last_name, bio, phone, avatar_url, is_online, last_seen, is_premium")
     .eq("id", viewedUserId)
     .single();
 
@@ -622,7 +624,7 @@ let viewedUserId = null;
   }
 
   const name = `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || profile.username;
-  document.getElementById("profileName").textContent = name;
+  document.getElementById("profileName").textContent = name + (profile.is_premium ? " ⭐" : "");
   const stillOnline = profile.is_online && (Date.now() - new Date(profile.last_seen).getTime()) < 35000;
   document.getElementById("profileStatus").textContent = stillOnline
     ? "آنلاین"
@@ -658,6 +660,27 @@ async function startChatWithThisUser() {
     .rpc("create_private_chat", { target_user_id: viewedUserId });
   if (error) { alert("خطا: " + error.message); return; }
   window.location.href = "app.html?open=" + chatId;
+}
+
+async function reportThisUser() {
+  const reason = prompt("دلیل گزارش رو بنویس:");
+  if (!reason) return;
+  const { data: { user } } = await window.supabaseClient.auth.getUser();
+  const { error } = await window.supabaseClient.from("reports").insert({
+    reporter_id: user.id, target_type: "user", target_id: viewedUserId, reason,
+  });
+  if (error) alert("خطا: " + error.message);
+  else alert("گزارش شما ثبت شد ✓");
+}
+
+async function blockThisUser() {
+  if (!confirm("این کاربر مسدود بشه؟ دیگه نمی‌تونه بهت پیام بده.")) return;
+  const { data: { user } } = await window.supabaseClient.auth.getUser();
+  const { error } = await window.supabaseClient.from("blocked_users").insert({
+    owner_id: user.id, blocked_id: viewedUserId,
+  });
+  if (error) alert("خطا: " + error.message);
+  else alert("کاربر مسدود شد ✓");
 }
 </script>
 </body>
