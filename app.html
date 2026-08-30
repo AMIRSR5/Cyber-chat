@@ -96,6 +96,11 @@ html, body {
 }
 .msg-row { animation: bubbleIn .18s ease-out; }
 
+@keyframes recPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .4; transform: scale(0.8); }
+}
+
 
 .mono {
   font-family: "JetBrains Mono", monospace;
@@ -1609,14 +1614,21 @@ async function openChat(chatId, override) {
     <div class="composer">
       <button class="icon-btn attach-btn" onclick="document.getElementById('mediaInput').click()" title="پیوست عکس، ویدیو، فایل یا آهنگ">📎</button>
       <input type="file" id="mediaInput" style="display:none" onchange="handleMediaUpload(event)">
-      <input type="text" id="msgInput" placeholder="پیام خود را بنویس..." onkeydown="if(event.key==='Enter') sendMessage()">
-      <button class="send-btn" onclick="sendMessage()">➤</button>
+      <input type="text" id="msgInput" placeholder="پیام خود را بنویس..." oninput="updateSendButtonMode()" onkeydown="if(event.key==='Enter') sendMessage()">
+      <button class="send-btn" id="sendBtn" onclick="handleSendButtonClick()">🎤</button>
+    </div>
+    <div id="recordingBar" style="display:none; align-items:center; gap:12px; padding:14px 16px; border-top:1px solid var(--border-soft); background:var(--bg-panel);">
+      <button class="icon-btn" style="color:var(--danger); border-color:var(--danger);" onclick="cancelRecording()">✕</button>
+      <span style="width:10px; height:10px; border-radius:50%; background:var(--danger); animation:recPulse 1s infinite;"></span>
+      <span id="recordingTimer" style="flex:1; font-family:'JetBrains Mono',monospace; font-size:14px;">00:00</span>
+      <button class="send-btn" onclick="stopAndSendRecording()">➤</button>
     </div>
   `;
 
   await loadMessages(chatId);
   subscribeToMessages(chatId);
   attachSwipeHandlers(document.getElementById("messagesArea"));
+  updateSendButtonMode();
 
   window.supabaseClient.rpc("mark_chat_read", { _chat_id: chatId }).then(() => {
     // clear the badge locally without a full reload
@@ -1762,6 +1774,7 @@ function startEditMessage(messageId) {
   editingMessageId = messageId;
   document.getElementById("replyPreview").style.display = "flex";
   document.getElementById("replyPreviewText").textContent = "در حال ویرایش پیام";
+  updateSendButtonMode();
 }
 
 async function deleteMessage(messageId) {
@@ -1848,7 +1861,7 @@ function cancelReply() {
   const wasEditing = editingMessageId;
   editingMessageId = null;
   document.getElementById("replyPreview").style.display = "none";
-  if (wasEditing) document.getElementById("msgInput").value = "";
+  if (wasEditing) { document.getElementById("msgInput").value = ""; updateSendButtonMode(); }
 }
 
 async function startForward(messageId) {
@@ -1959,6 +1972,7 @@ async function sendMessage() {
   }
 
   input.value = "";
+  updateSendButtonMode();
 
   // render immediately (optimistic) instead of waiting for the realtime echo,
   // which can lag a few seconds — we generate the id ourselves so the
@@ -2002,6 +2016,90 @@ async function sendMessage() {
     const meta = row.querySelector(".bubble-meta");
     if (meta) meta.textContent = formatTime(optimisticMsg.created_at) + " · ✓";
   }
+}
+
+// ---------- voice recording ----------
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordingStartTime = null;
+let recordingTimerInterval = null;
+
+function updateSendButtonMode() {
+  const hasText = document.getElementById("msgInput").value.trim().length > 0;
+  const btn = document.getElementById("sendBtn");
+  if (!btn) return;
+  btn.textContent = hasText ? "➤" : "🎤";
+  btn.onclick = hasText ? sendMessage : startRecording;
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.start();
+
+    recordingStartTime = Date.now();
+    document.querySelector(".composer").style.display = "none";
+    document.getElementById("recordingBar").style.display = "flex";
+    recordingTimerInterval = setInterval(() => {
+      const secs = Math.floor((Date.now() - recordingStartTime) / 1000);
+      const mm = String(Math.floor(secs / 60)).padStart(2, "0");
+      const ss = String(secs % 60).padStart(2, "0");
+      document.getElementById("recordingTimer").textContent = `${mm}:${ss}`;
+    }, 250);
+  } catch (err) {
+    alert("دسترسی به میکروفون ممکن نشد: " + err.message);
+  }
+}
+
+function stopRecordingInternal() {
+  clearInterval(recordingTimerInterval);
+  document.getElementById("recordingBar").style.display = "none";
+  document.querySelector(".composer").style.display = "flex";
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  }
+}
+
+function cancelRecording() {
+  if (mediaRecorder) {
+    mediaRecorder.onstop = null;
+    mediaRecorder.stop();
+  }
+  stopRecordingInternal();
+}
+
+async function stopAndSendRecording() {
+  if (!mediaRecorder) return;
+  mediaRecorder.onstop = async () => {
+    stopRecordingInternal();
+    const blob = new Blob(recordedChunks, { type: "audio/webm" });
+    if (blob.size < 500) return; // too short, ignore accidental taps
+    await uploadVoiceBlob(blob);
+  };
+  mediaRecorder.stop();
+}
+
+async function uploadVoiceBlob(blob) {
+  if (!activeChatId) return;
+  const path = `${activeChatId}/${crypto.randomUUID()}.webm`;
+
+  const { error: upErr } = await window.supabaseClient.storage.from("chat-voice").upload(path, blob, {
+    contentType: "audio/webm",
+  });
+  if (upErr) { alert("خطا در آپلود ویس: " + upErr.message); return; }
+
+  const { data: newMsg, error: msgErr } = await window.supabaseClient
+    .from("messages")
+    .insert({ chat_id: activeChatId, sender_id: me.id, message_type: "voice", status: "sent" })
+    .select().single();
+  if (msgErr) { alert("خطا: " + msgErr.message); return; }
+
+  await window.supabaseClient.from("message_attachments").insert({
+    message_id: newMsg.id, storage_path: path, file_name: "ویس", file_type: "audio/webm",
+  });
 }
 
 async function handleMediaUpload(event) {
