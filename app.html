@@ -382,7 +382,7 @@ input, textarea, select { font-family: inherit; }
 }
 .fab {
   position: absolute;
-  bottom: 92px;
+  bottom: 74px;
   left: 20px;
   width: 56px; height: 56px; border-radius: 50%;
   background: linear-gradient(135deg, var(--cyan), var(--magenta));
@@ -393,35 +393,37 @@ input, textarea, select { font-family: inherit; }
 }
 .bottom-nav {
   position: absolute;
-  bottom: 10px; left: 12px; right: 12px;
+  bottom: 0; left: 0; right: 0;
   display: flex;
-  border-radius: 22px;
-  background: rgba(23, 33, 43, 0.68);
+  background: rgba(23, 33, 43, 0.86);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  border-top: 0.5px solid rgba(255,255,255,0.12);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   z-index: 9;
 }
 [data-theme="light"] .bottom-nav {
-  background: rgba(255, 255, 255, 0.68);
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  background: rgba(247, 247, 248, 0.86);
+  border-top: 0.5px solid rgba(0,0,0,0.15);
 }
 .bottom-nav-item {
-  flex: 1; background: none; border: none; padding: 9px 0 10px;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  color: var(--text-faint); font-size: 11px; font-family: inherit;
+  flex: 1; background: none; border: none; padding: 7px 0 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  color: var(--text-faint); font-size: 10px; font-family: inherit;
 }
 .bottom-nav-item.active { color: var(--cyan); }
-.chat-list { padding-bottom: 76px; }
-.bottom-nav-icon { font-size: 20px; }
+.chat-list { padding-bottom: 60px; }
+.bottom-nav-icon { font-size: 22px; }
 .sidebar-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px;
-  border-bottom: 1px solid var(--border-soft);
+  padding: 8px 16px 4px;
 }
-.sidebar-search { padding: 12px 16px; }
+.sidebar-title {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+.sidebar-search { padding: 8px 16px 12px; }
 .sidebar-search input {
   width: 100%; padding: 10px 14px; border-radius: 999px;
   border: 1px solid var(--border-soft); background: var(--bg-deep);
@@ -446,10 +448,17 @@ input, textarea, select { font-family: inherit; }
 .chat-row-actions .delete-btn { background: var(--danger); }
 .chat-item {
   display: flex; gap: 13px; align-items: center;
-  padding: 10px 14px; border-bottom: 1px solid var(--border-soft);
+  padding: 10px 14px;
   transition: transform .15s ease;
   background: var(--bg-panel);
   position: relative; z-index: 1;
+}
+.chat-item::after {
+  content: "";
+  position: absolute;
+  right: 79px; left: 0; bottom: 0;
+  height: 1px;
+  background: var(--border-soft);
 }
 .chat-item:hover { background: var(--bg-elevated); }
 .stories-bar { display: flex; gap: 14px; padding: 12px 16px; overflow-x: auto; border-bottom: 1px solid var(--border-soft); }
@@ -629,10 +638,9 @@ input, textarea, select { font-family: inherit; }
 <div class="app-shell">
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="brand"><span class="brand-mark">C</span> Cyber Chat</div>
-      <div style="display:flex; gap:8px;">
-        <button class="icon-btn" onclick="toggleTheme()" title="تغییر تم">🌓</button>
-      </div>
+      <button class="icon-btn" onclick="toggleTheme()" title="تغییر تم">🌓</button>
+      <div class="sidebar-title">چت‌ها</div>
+      <div class="avatar" id="myMiniAvatar" style="width:32px; height:32px; font-size:13px; cursor:pointer;" onclick="window.location.href='settings.html'">?</div>
     </div>
     <div class="sidebar-search">
       <input type="text" id="chatSearch" placeholder="جستجو در گفتگوها و کاربران..." oninput="handleGlobalSearchInput()">
@@ -861,6 +869,10 @@ if (window.visualViewport) window.visualViewport.addEventListener("resize", setA
 
   me = await getCurrentProfile();
   if (!me) return;
+
+  const miniAvatar = document.getElementById("myMiniAvatar");
+  if (me.avatar_url) { miniAvatar.style.backgroundImage = `url(${me.avatar_url})`; miniAvatar.textContent = ""; }
+  else { miniAvatar.textContent = (me.first_name || me.username || "?").charAt(0).toUpperCase(); }
 
   applyStoredTheme();
   startPresenceHeartbeat();
