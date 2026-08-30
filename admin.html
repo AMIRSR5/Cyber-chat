@@ -499,6 +499,8 @@ input, textarea, select { font-family: inherit; }
     <div class="admin-tabs">
       <div class="admin-tab active" id="tabDash" onclick="switchAdminTab('dashboard')">داشبورد</div>
       <div class="admin-tab" id="tabUsers" onclick="switchAdminTab('users')">کاربران</div>
+      <div class="admin-tab" id="tabGroups" onclick="switchAdminTab('groups')">گروه‌ها</div>
+      <div class="admin-tab" id="tabChannels" onclick="switchAdminTab('channels')">کانال‌ها</div>
       <div class="admin-tab" id="tabReports" onclick="switchAdminTab('reports')">گزارش‌ها</div>
     </div>
 
@@ -513,6 +515,18 @@ input, textarea, select { font-family: inherit; }
     <div id="paneUsers" class="admin-section" style="display:none;">
       <input type="text" class="admin-search" id="userSearch" placeholder="جستجو با یوزرنیم..." oninput="debounceUserSearch()">
       <div id="userList"></div>
+    </div>
+
+    <!-- GROUPS -->
+    <div id="paneGroups" class="admin-section" style="display:none;">
+      <input type="text" class="admin-search" id="groupSearch" placeholder="جستجوی نام گروه..." oninput="debounceGroupSearch()">
+      <div id="adminGroupList"></div>
+    </div>
+
+    <!-- CHANNELS -->
+    <div id="paneChannels" class="admin-section" style="display:none;">
+      <input type="text" class="admin-search" id="channelSearch" placeholder="جستجوی نام/یوزرنیم کانال..." oninput="debounceChannelSearch()">
+      <div id="adminChannelList"></div>
     </div>
 
     <!-- REPORTS -->
@@ -641,13 +655,107 @@ let isAdminUser = false;
 function switchAdminTab(tab) {
   document.getElementById("tabDash").classList.toggle("active", tab === "dashboard");
   document.getElementById("tabUsers").classList.toggle("active", tab === "users");
+  document.getElementById("tabGroups").classList.toggle("active", tab === "groups");
+  document.getElementById("tabChannels").classList.toggle("active", tab === "channels");
   document.getElementById("tabReports").classList.toggle("active", tab === "reports");
   document.getElementById("paneDashboard").style.display = tab === "dashboard" ? "block" : "none";
   document.getElementById("paneUsers").style.display = tab === "users" ? "block" : "none";
+  document.getElementById("paneGroups").style.display = tab === "groups" ? "block" : "none";
+  document.getElementById("paneChannels").style.display = tab === "channels" ? "block" : "none";
   document.getElementById("paneReports").style.display = tab === "reports" ? "block" : "none";
 
   if (tab === "users" && !document.getElementById("userList").dataset.loaded) loadUsers("");
+  if (tab === "groups" && !document.getElementById("adminGroupList").dataset.loaded) loadAdminGroups("");
+  if (tab === "channels" && !document.getElementById("adminChannelList").dataset.loaded) loadAdminChannels("");
   if (tab === "reports") loadReports();
+}
+
+let groupSearchTimer = null;
+function debounceGroupSearch() {
+  clearTimeout(groupSearchTimer);
+  groupSearchTimer = setTimeout(() => loadAdminGroups(document.getElementById("groupSearch").value.trim()), 300);
+}
+
+async function loadAdminGroups(query) {
+  document.getElementById("adminGroupList").dataset.loaded = "1";
+  let req = window.supabaseClient.from("groups")
+    .select("id, chat_id, name, description, created_at, created_by")
+    .order("created_at", { ascending: false }).limit(50);
+  if (query) req = req.ilike("name", `%${query}%`);
+
+  const { data, error } = await req;
+  const list = document.getElementById("adminGroupList");
+  if (error || !data || data.length === 0) {
+    list.innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align:center;">گروهی پیدا نشد</div>`;
+    return;
+  }
+
+  const withCounts = await Promise.all(data.map(async g => {
+    const { count } = await window.supabaseClient
+      .from("group_members").select("user_id", { count: "exact", head: true }).eq("group_id", g.id);
+    return { ...g, memberCount: count || 0 };
+  }));
+
+  list.innerHTML = withCounts.map(g => `
+    <div class="user-row">
+      <div class="avatar" style="width:40px;height:40px;font-size:15px;">👥</div>
+      <div class="info">
+        <div class="n">${escapeHtml(g.name)}</div>
+        <div class="u">${g.memberCount} عضو · ${new Date(g.created_at).toLocaleDateString("fa-IR")}</div>
+      </div>
+      <button class="mini-btn danger" onclick="deleteGroupAdmin('${g.id}', '${g.chat_id}')">حذف گروه</button>
+    </div>`).join("");
+}
+
+async function deleteGroupAdmin(groupId, chatId) {
+  if (!confirm("این گروه کاملاً حذف بشه؟ این کار غیرقابل بازگشته.")) return;
+  await window.supabaseClient.from("groups").delete().eq("id", groupId);
+  await window.supabaseClient.from("chats").delete().eq("id", chatId);
+  loadAdminGroups(document.getElementById("groupSearch").value.trim());
+}
+
+let channelSearchTimer = null;
+function debounceChannelSearch() {
+  clearTimeout(channelSearchTimer);
+  channelSearchTimer = setTimeout(() => loadAdminChannels(document.getElementById("channelSearch").value.trim()), 300);
+}
+
+async function loadAdminChannels(query) {
+  document.getElementById("adminChannelList").dataset.loaded = "1";
+  let req = window.supabaseClient.from("channels")
+    .select("id, chat_id, name, username, created_at")
+    .order("created_at", { ascending: false }).limit(50);
+  if (query) req = req.or(`name.ilike.%${query}%,username.ilike.%${query}%`);
+
+  const { data, error } = await req;
+  const list = document.getElementById("adminChannelList");
+  if (error || !data || data.length === 0) {
+    list.innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align:center;">کانالی پیدا نشد</div>`;
+    return;
+  }
+
+  const withCounts = await Promise.all(data.map(async ch => {
+    const { count } = await window.supabaseClient
+      .from("channel_members").select("user_id", { count: "exact", head: true }).eq("channel_id", ch.id);
+    return { ...ch, subCount: count || 0 };
+  }));
+
+  list.innerHTML = withCounts.map(ch => `
+    <div class="user-row">
+      <div class="avatar" style="width:40px;height:40px;font-size:15px;">📢</div>
+      <div class="info">
+        <div class="n">${escapeHtml(ch.name)}</div>
+        <div class="u">@${escapeHtml(ch.username)} · ${ch.subCount} مشترک</div>
+      </div>
+      <button class="mini-btn danger" onclick="deleteChannelAdmin('${ch.id}', '${ch.chat_id}')">حذف کانال</button>
+    </div>`).join("");
+}
+
+async function deleteChannelAdmin(channelId, chatId) {
+  if (!confirm("این کانال کاملاً حذف بشه؟ این کار غیرقابل بازگشته.")) return;
+  await window.supabaseClient.from("channels").delete().eq("id", channelId);
+  await window.supabaseClient.from("chats").delete().eq("id", chatId);
+  loadAdminChannels(document.getElementById("channelSearch").value.trim());
 }
 
 async function loadDashboard() {
