@@ -545,22 +545,54 @@ input, textarea, select { font-family: inherit; }
 .icon-btn:hover { color: var(--cyan); border-color: var(--cyan); }
 .attach-btn { border-radius: 50%; flex-shrink: 0; }
 
-.messages-area { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.messages-area {
+  flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px;
+  background-color: var(--bg-deep);
+  background-image:
+    radial-gradient(circle at 20% 15%, rgba(42,171,238,0.05) 0%, transparent 45%),
+    radial-gradient(circle at 80% 40%, rgba(34,158,217,0.04) 0%, transparent 40%),
+    radial-gradient(circle at 30% 75%, rgba(42,171,238,0.04) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(34,158,217,0.05) 0%, transparent 45%);
+  background-attachment: local;
+}
+[data-theme="light"] .messages-area {
+  background-image:
+    radial-gradient(circle at 20% 15%, rgba(42,171,238,0.06) 0%, transparent 45%),
+    radial-gradient(circle at 80% 40%, rgba(34,158,217,0.05) 0%, transparent 40%),
+    radial-gradient(circle at 30% 75%, rgba(42,171,238,0.05) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(34,158,217,0.06) 0%, transparent 45%);
+}
 .msg-row { display: flex; }
 .msg-row.own { justify-content: flex-start; flex-direction: row-reverse; }
 .bubble {
   max-width: 75%;
   padding: 8px 12px;
-  border-radius: 16px;
+  border-radius: 16px 16px 16px 4px;
   font-size: 15px;
   line-height: 1.55;
   background: var(--other-bubble);
   border: none;
   box-shadow: 0 1px 2px rgba(0,0,0,.15);
+  position: relative;
+}
+.bubble::after {
+  content: "";
+  position: absolute;
+  bottom: 0; left: -6px;
+  width: 0; height: 0;
+  border-style: solid;
+  border-width: 0 7px 8px 0;
+  border-color: transparent var(--other-bubble) transparent transparent;
 }
 .msg-row.own .bubble {
   background: var(--own-bubble);
+  border-radius: 16px 16px 4px 16px;
   border: none;
+}
+.msg-row.own .bubble::after {
+  left: auto; right: -6px;
+  border-width: 0 0 8px 7px;
+  border-color: transparent transparent transparent var(--own-bubble);
 }
 .bubble-meta { display: flex; gap: 6px; margin-top: 3px; font-size: 11px; color: var(--text-faint); justify-content: flex-end; }
 .msg-row.own .bubble-meta { color: rgba(255,255,255,.55); }
