@@ -612,11 +612,20 @@ let viewedUserId = null;
   viewedUserId = params.get("id");
   if (!viewedUserId) { document.getElementById("loadingMsg").textContent = "کاربر مشخص نشده"; return; }
 
-  const { data: profile, error } = await window.supabaseClient
-    .from("profiles")
-    .select("id, username, first_name, last_name, bio, phone, avatar_url, is_online, last_seen, is_premium")
-    .eq("id", viewedUserId)
-    .single();
+  const [{ data: profile, error }, { data: contactRow }] = await Promise.all([
+    window.supabaseClient
+      .from("profiles")
+      .select("id, username, first_name, last_name, bio, phone, avatar_url, is_online, last_seen, is_premium")
+      .eq("id", viewedUserId)
+      .single(),
+    window.supabaseClient
+      .from("contacts")
+      .select("contact_id")
+      .eq("owner_id", session.user.id)
+      .eq("contact_id", viewedUserId)
+      .maybeSingle(),
+  ]);
+  const iHaveSavedThem = !!contactRow;
 
   if (error || !profile) {
     document.getElementById("loadingMsg").textContent = "کاربر پیدا نشد";
@@ -646,7 +655,9 @@ let viewedUserId = null;
     document.getElementById("bioRow").style.display = "block";
     document.getElementById("profileBio").textContent = profile.bio;
   }
-  if (profile.phone) {
+  // phone is only shown to people who have actually saved this person as a
+  // contact (by phone/username) — matches how Telegram gates phone visibility
+  if (profile.phone && iHaveSavedThem) {
     document.getElementById("phoneRow").style.display = "block";
     document.getElementById("profilePhone").textContent = profile.phone;
   }
